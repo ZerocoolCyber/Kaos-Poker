@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Kaos Theory - Wallboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;600;700&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet"/>
+<script src="/socket.io/socket.io.js"></script>
+<style>
+:root {
+  --neon-cyan: #00f3ff;
+  --neon-magenta: #ff003c;
+  --bg: #020617;
+  --panel-bg: rgba(10, 25, 47, 0.8);
+  --border: rgba(0, 243, 255, 0.2);
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: var(--bg); color: #fff; font-family: 'Rajdhani', sans-serif; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+
+/* -- HEADER -- */
+.header { display: flex; justify-content: space-between; align-items: center; padding: 1.5rem 3rem; background: var(--panel-bg); border-bottom: 2px solid var(--border); box-shadow: 0 0 30px rgba(0,243,255,0.1); }
+.logo { font-family: 'Orbitron', sans-serif; font-size: 2.5rem; font-weight: 900; color: var(--neon-cyan); letter-spacing: 0.2em; text-shadow: 0 0 20px rgba(0,243,255,0.5); }
+.game-info { display: flex; gap: 4rem; text-align: center; }
+.info-label { font-family: 'Orbitron'; font-size: 1rem; color: #445b73; letter-spacing: 0.1em; text-transform: uppercase; }
+.info-val { font-size: 2.5rem; font-weight: 700; color: #fff; }
+.access-code { font-family: 'Orbitron'; font-size: 2.5rem; color: var(--neon-magenta); text-shadow: 0 0 20px rgba(255,0,60,0.5); letter-spacing: 0.2em; }
+
+/* -- MAIN -- */
+.main-content { display: flex; flex: 1; padding: 2rem; gap: 2rem; }
+
+/* LEADERBOARD */
+.leaderboard { flex: 1; display: flex; flex-direction: column; gap: 1rem; }
+.lb-title { font-family: 'Orbitron'; font-size: 1.5rem; color: var(--neon-cyan); letter-spacing: 0.1em; border-bottom: 1px solid var(--border); padding-bottom: 0.5rem; }
+.lb-row { display: flex; align-items: center; background: var(--panel-bg); border: 1px solid var(--border); padding: 1rem; border-radius: 8px; transition: transform 0.3s; }
+.lb-row.busted { opacity: 0.4; filter: grayscale(1); }
+.lb-rank { font-family: 'Orbitron'; font-size: 2rem; font-weight: 900; color: #445b73; width: 50px; text-align: center; }
+.lb-avatar { width: 60px; height: 60px; border-radius: 50%; border: 2px solid var(--neon-cyan); background-image: url('/images/Avatar-Select.png'); background-size: 500% 300%; margin: 0 1.5rem; }
+.lb-name { flex: 1; font-size: 1.8rem; font-weight: 700; text-transform: uppercase; }
+.lb-chips { font-family: 'Orbitron'; font-size: 2.2rem; font-weight: 900; color: var(--neon-cyan); }
+
+/* LIVE ACTION */
+.action-view { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; background: var(--panel-bg); border: 1px solid var(--border); border-radius: 8px; position: relative; }
+.pot-label { font-family: 'Orbitron'; font-size: 1.5rem; color: var(--neon-cyan); letter-spacing: 0.2em; }
+.pot-val { font-family: 'Orbitron'; font-size: 6rem; font-weight: 900; text-shadow: 0 0 40px rgba(0,243,255,0.4); margin-bottom: 2rem; }
+
+.community-cards { display: flex; gap: 15px; height: 200px; }
+.card-wrapper { display: flex; filter: drop-shadow(0 10px 15px rgba(0,0,0,0.8)); width: 140px; height: 196px; }
+
+/* MARQUEE */
+.marquee { background: var(--neon-magenta); color: #fff; padding: 1rem; font-family: 'Orbitron'; font-size: 2rem; font-weight: 900; letter-spacing: 0.1em; text-align: center; text-transform: uppercase; overflow: hidden; white-space: nowrap; box-shadow: 0 0 30px rgba(255,0,60,0.4); }
+.marquee-content { display: inline-block; animation: scroll 15s linear infinite; }
+@keyframes scroll { 0% { transform: translateX(100vw); } 100% { transform: translateX(-100%); } }
+
+/* SETUP OVERLAY */
+.setup { position: fixed; inset: 0; background: var(--bg); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 100; }
+.setup input { background: var(--panel-bg); border: 2px solid var(--neon-cyan); color: #fff; font-family: 'Orbitron'; font-size: 3rem; text-align: center; text-transform: uppercase; padding: 1rem; width: 400px; letter-spacing: 0.2em; outline: none; }
+</style>
+</head>
+<body>
+
+<div class="setup" id="setup-screen">
+  <div style="font-family:'Orbitron'; font-size:2rem; color:var(--neon-cyan); margin-bottom:2rem; letter-spacing:0.2em;">ENTER UPLINK CODE</div>
+  <input type="text" id="tv-code" maxlength="6" autofocus onkeydown="if(event.key==='Enter') connectTV()"/>
+</div>
+
+<div class="header">
+  <div class="logo">KAOS THEORY</div>
+  <div class="game-info">
+    <div><div class="info-label">BLINDS</div><div class="info-val" id="tv-blinds">--/--</div></div>
+    <div><div class="info-label">PHASE</div><div class="info-val" id="tv-phase" style="text-transform: uppercase;">WAITING</div></div>
+  </div>
+  <div class="access-code" id="tv-code-display">------</div>
+</div>
+
+<div class="main-content">
+  <div class="leaderboard">
+    <div class="lb-title">GLOBAL LEADERBOARD</div>
+    <div id="lb-container"></div>
+  </div>
+
+  <div class="action-view">
+    <div class="pot-label">TOTAL POT</div>
+    <div class="pot-val" id="tv-pot">0</div>
+    <div class="community-cards" id="tv-cards"></div>
+  </div>
+</div>
+
+<div class="marquee"><div class="marquee-content" id="tv-marquee">AWAITING HAND SEQUENCE...</div></div>
+
+<script>
+let socket = io();
+
+function connectTV() {
+  const code = document.getElementById('tv-code').value.trim().toUpperCase();
+  if (code.length === 6) {
+    document.getElementById('setup-screen').style.display = 'none';
+    socket.emit('join_game', { gameId: code, name: 'WALLBOARD', asSpectator: true });
+    document.getElementById('tv-code-display').textContent = code;
+  }
+}
+
+// Check if code was passed in URL (e.g., /tv?id=XXXXXX)
+const urlParams = new URLSearchParams(window.location.search);
+if (urlParams.has('id')) {
+  document.getElementById('tv-code').value = urlParams.get('id');
+  connectTV();
+}
+
+socket.on('game_state', (state) => {
+  document.getElementById('tv-blinds').textContent = `${state.smallBlind}/${state.bigBlind}`;
+  document.getElementById('tv-phase').textContent = state.phase;
+  document.getElementById('tv-pot').textContent = state.pot;
+
+  // Build Leaderboard
+  const players = Object.values(state.players).sort((a, b) => {
+    if (a.isBusted !== b.isBusted) return a.isBusted ? 1 : -1;
+    return b.chips - a.chips;
+  });
+
+  let lbHtml = '';
+  players.forEach((p, idx) => {
+    const aId = p.avatarId !== undefined ? p.avatarId : 0;
+    const spriteX = (aId % 5) * 25;
+    const spriteY = Math.floor(aId / 5) * 50;
+    const cls = p.isBusted ? 'lb-row busted' : 'lb-row';
+    
+    lbHtml += `
+      <div class="${cls}">
+        <div class="lb-rank">#${idx + 1}</div>
+        <div class="lb-avatar" style="background-position: ${spriteX}% ${spriteY}%"></div>
+        <div class="lb-name">${p.name} ${p.isBusted ? '<span style="color:var(--neon-magenta); font-size:1rem;">(OUT)</span>' : ''}</div>
+        <div class="lb-chips">${p.chips}</div>
+      </div>
+    `;
+  });
+  document.getElementById('lb-container').innerHTML = lbHtml;
+
+  // Render Community Cards
+  let commHtml = '';
+  for(let i=0; i<5; i++) {
+    if (state.communityCards[i]) {
+      const c = state.communityCards[i];
+      const color = (c.suit === 'h' || c.suit === 'd') ? '#ff003c' : '#00f3ff';
+      const symbols = { s: '♠', h: '♥', d: '♦', c: '♣' };
+      const s = symbols[c.suit];
+      const displayRank = c.rank === 'T' ? '10' : c.rank;
+      
+      commHtml += `
+        <div class="card-wrapper">
+          <svg viewBox="0 0 80 110" width="100%" height="100%" style="display:block;">
+            <rect x="10" y="10" width="60" height="90" rx="4" fill="#020617" stroke="${color}" stroke-width="1.5"/>
+            <text x="20" y="28" fill="${color}" font-family="monospace" font-size="16" font-weight="bold" text-anchor="middle">${displayRank}</text>
+            <text x="20" y="44" fill="${color}" font-family="sans-serif" font-size="14" text-anchor="middle">${s}</text>
+            <text x="40" y="64" fill="${color}" font-family="sans-serif" font-size="32" text-anchor="middle">${s}</text>
+          </svg>
+        </div>`;
+    }
+  }
+  document.getElementById('tv-cards').innerHTML = commHtml;
+});
+
+socket.on('showdown', (result) => {
+  let winners = result.results.map(pot => `${pot.players.map(p=>p.name).join(' & ')} WINS ${pot.pot} CHIPS WITH ${pot.handName || 'UNCONTESTED POT'}`).join(' /// ');
+  document.getElementById('tv-marquee').textContent = `>>> ${winners} <<<`;
+});
+
+</script>
+</body>
+</html>

@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Kaos Theory Poker - Terminal</title>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;600;700&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet"/>
+<style>
+  :root {
+    --neon-cyan: #00f3ff;
+    --neon-magenta: #ff003c;
+    --dim: #445b73;
+    --border: rgba(0, 243, 255, 0.15);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #020617; color: #e2e8f0;
+    font-family: 'Rajdhani', sans-serif;
+    min-height: 100vh; display: flex;
+    flex-direction: column; align-items: center; justify-content: center;
+    padding: 1rem;
+  }
+  .container {
+    display: flex; flex-direction: column; gap: 1.5rem;
+    width: 100%; max-width: 480px; padding: 2rem;
+    background: #0a192f; border: 1px solid var(--border);
+    box-shadow: 0 0 40px rgba(0,243,255,0.05);
+  }
+  @media (max-width: 600px) {
+    .container { padding: 1rem; gap: 1rem; }
+  }
+  .logo-text {
+    font-family: 'Orbitron', sans-serif; font-size: 1.5rem; font-weight: 900;
+    letter-spacing: 0.15em; color: var(--neon-cyan); text-align: center;
+    text-shadow: 0 0 10px rgba(0,243,255,0.4); margin-bottom: 1rem;
+  }
+  .profile-section {
+    padding: 1rem; border: 1px solid rgba(255,0,60,0.3);
+    background: rgba(255,0,60,0.05); border-radius: 4px;
+  }
+  .avatar-grid {
+    display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.5rem; margin-top: 0.8rem;
+  }
+  .avatar-option {
+    width: 100%; aspect-ratio: 1; border-radius: 50%; cursor: pointer;
+    background-image: url('/images/Avatar-Select.png');
+    background-size: 500% 300%;
+    border: 2px solid transparent; transition: 0.2s;
+  }
+  .avatar-option:hover { border-color: rgba(0,243,255,0.5); }
+  .avatar-option.selected { border-color: var(--neon-cyan); box-shadow: 0 0 15px rgba(0,243,255,0.6); }
+
+  .tabs { display: flex; border: 1px solid var(--border); border-radius: 4px; overflow: hidden; }
+  .tab {
+    flex: 1; padding: 0.8rem; background: transparent; color: var(--dim);
+    border: none; cursor: pointer; font-family: 'Orbitron', sans-serif;
+    font-size: 0.75rem; font-weight: 700; letter-spacing: 0.1em; transition: 0.2s;
+  }
+  .tab.active { background: rgba(0,243,255,0.1); color: var(--neon-cyan); }
+  
+  .panel { display: none; flex-direction: column; gap: 1rem; }
+  .panel.active { display: flex; }
+  .form-group { display: flex; flex-direction: column; gap: 0.4rem; }
+  
+  label {
+    font-family: 'Orbitron', sans-serif; font-size: 0.65rem;
+    letter-spacing: 0.12em; color: var(--neon-cyan); text-transform: uppercase;
+  }
+  input, select {
+    background: #020617; border: 1px solid var(--border);
+    color: #fff; padding: 0.75rem 1rem; font-family: 'Rajdhani', sans-serif;
+    font-size: 1rem; outline: none; transition: 0.2s;
+  }
+  input:focus, select:focus { border-color: var(--neon-cyan); }
+  
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  .btn {
+    width: 100%; padding: 1rem; background: rgba(0,243,255,0.05);
+    border: 1px solid var(--neon-cyan); color: var(--neon-cyan);
+    font-family: 'Orbitron', sans-serif; font-size: 0.85rem; font-weight: 700;
+    letter-spacing: 0.15em; text-transform: uppercase; cursor: pointer; transition: 0.2s;
+  }
+  .btn:hover { background: rgba(0,243,255,0.15); box-shadow: 0 0 20px rgba(0,243,255,0.2); }
+  .error { color: var(--neon-magenta); font-size: 0.85rem; text-align: center; display: none; }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <div class="logo-text">KAOS THEORY POKER</div>
+
+  <div class="profile-section">
+    <div class="form-group">
+      <label style="color: var(--neon-magenta);">OPERATOR CALLSIGN</label>
+      <input type="text" id="player-name" placeholder="Enter your name" maxlength="15"/>
+    </div>
+    <div class="form-group" style="margin-top: 1rem;">
+      <label style="color: var(--neon-magenta);">SELECT AVATAR</label>
+      <div class="avatar-grid" id="avatar-grid"></div>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('create')">INIT SERVER</button>
+    <button class="tab" onclick="switchTab('join')">JOIN UPLINK</button>
+  </div>
+
+  <div class="panel active" id="panel-create">
+    <div class="row">
+      <div class="form-group">
+        <label>Game Type</label>
+        <select id="game-type"><option value="cash">Cash Game</option><option value="tournament">Tournament</option></select>
+      </div>
+      <div class="form-group">
+        <label>Max Players</label>
+        <select id="max-players">
+          <option value="6">6</option><option value="8" selected>8</option>
+        </select>
+      </div>
+    </div>
+    <div class="row">
+      <div class="form-group">
+        <label>Starting Chips</label>
+        <input type="number" id="starting-chips" value="1000"/>
+      </div>
+      <div class="form-group">
+        <label>Max Rebuys</label>
+        <select id="max-rebuys" onchange="toggleRebuyAmount()">
+          <option value="-1" selected>Unlimited (∞)</option>
+          <option value="0">0 (No Rebuys)</option>
+          <option value="1">1 Rebuy</option>
+          <option value="2">2 Rebuys</option>
+          <option value="3">3 Rebuys</option>
+        </select>
+      </div>
+    </div>
+    <div class="row">
+      <div class="form-group"><label>Small Blind</label><input type="number" id="small-blind" value="10"/></div>
+      <div class="form-group"><label>Big Blind</label><input type="number" id="big-blind" value="20"/></div>
+    </div>
+    <div class="form-group" id="rebuy-amt-container">
+      <label>Rebuy Cost (Chips)</label>
+      <input type="number" id="rebuy-amount" value="1000"/>
+    </div>
+    <div class="error" id="create-error"></div>
+    <button class="btn" onclick="createGame()">Launch Server</button>
+  </div>
+
+  <div class="panel" id="panel-join">
+    <div class="form-group">
+      <label>ACCESS CODE</label>
+      <input type="text" id="join-code" placeholder="6-CHAR CODE" maxlength="6" style="text-transform:uppercase; font-family:'Orbitron',sans-serif; letter-spacing:0.2em; text-align:center;"/>
+    </div>
+    <div class="error" id="join-error"></div>
+    <button class="btn" onclick="joinGame()">Connect</button>
+  </div>
+</div>
+
+<script>
+  let selectedAvatarId = 0;
+
+  const grid = document.getElementById('avatar-grid');
+  for(let i = 0; i < 15; i++) {
+    const col = i % 5;
+    const row = Math.floor(i / 5);
+    const div = document.createElement('div');
+    div.className = 'avatar-option';
+    if(i === 0) div.classList.add('selected');
+    div.style.backgroundPosition = `${col * 25}% ${row * 50}%`;
+    div.onclick = () => {
+      document.querySelectorAll('.avatar-option').forEach(el => el.classList.remove('selected'));
+      div.classList.add('selected');
+      selectedAvatarId = i;
+    };
+    grid.appendChild(div);
+  }
+
+  function switchTab(tab) {
+    document.querySelectorAll('.tab').forEach((t,i) => t.classList.toggle('active', (i===0&&tab==='create')||(i===1&&tab==='join')));
+    document.getElementById('panel-create').classList.toggle('active', tab==='create');
+    document.getElementById('panel-join').classList.toggle('active', tab==='join');
+  }
+
+  function toggleRebuyAmount() {
+    const maxRebuys = document.getElementById('max-rebuys').value;
+    document.getElementById('rebuy-amt-container').style.display = maxRebuys === "0" ? 'none' : 'flex';
+  }
+
+  document.getElementById('join-code').addEventListener('input', function() { this.value = this.value.toUpperCase(); });
+
+  function validateProfile() {
+    const name = document.getElementById('player-name').value.trim();
+    if (!name) return false;
+    sessionStorage.setItem('playerName', name);
+    sessionStorage.setItem('avatarId', selectedAvatarId);
+    return true;
+  }
+
+  async function createGame() {
+    if (!validateProfile()) { showError('create-error', 'Please enter an Operator Callsign'); return; }
+    
+    const config = {
+      gameType: document.getElementById('game-type').value,
+      startingChips: parseInt(document.getElementById('starting-chips').value)||1000,
+      maxPlayers: parseInt(document.getElementById('max-players').value)||8,
+      smallBlind: parseInt(document.getElementById('small-blind').value)||10,
+      bigBlind: parseInt(document.getElementById('big-blind').value)||20,
+      maxRebuys: parseInt(document.getElementById('max-rebuys').value),
+      rebuyAmount: parseInt(document.getElementById('rebuy-amount').value)||1000
+    };
+
+    try {
+      const res = await fetch('/create-game', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(config) });
+      const data = await res.json();
+      sessionStorage.setItem('isHost', 'true');
+      window.location.href = `/game?id=${data.gameId}`;
+    } catch(e) { showError('create-error', 'Server Init Failed'); }
+  }
+
+  function joinGame() {
+    if (!validateProfile()) { showError('join-error', 'Please enter an Operator Callsign'); return; }
+    const code = document.getElementById('join-code').value.trim().toUpperCase();
+    if (code.length !== 6) { showError('join-error', 'Invalid Access Code'); return; }
+    
+    sessionStorage.setItem('isHost', 'false');
+    window.location.href = `/game?id=${code}`;
+  }
+
+  function showError(id, msg) {
+    const el = document.getElementById(id);
+    el.textContent = msg; el.style.display = 'block';
+    setTimeout(() => el.style.display = 'none', 3000);
+  }
+</script>
+</body>
+</html>
