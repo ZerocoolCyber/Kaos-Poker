@@ -89,7 +89,6 @@ class PokerGame {
     this.startingChips = config.startingChips || 1000;
     this.maxPlayers = config.maxPlayers || 8;
     
-    // Core Blinds
     this.initialSmallBlind = config.smallBlind || 10;
     this.initialBigBlind = config.bigBlind || 20;
     this.smallBlind = this.initialSmallBlind;
@@ -99,12 +98,10 @@ class PokerGame {
     this.allowRebuy = this.maxRebuys !== 0;
     this.rebuyAmount = config.rebuyAmount || config.startingChips || 1000;
 
-    // Tournament Escalator Dynamics
     this.blindLevelDuration = config.blindDuration || 15; 
     this.currentBlindLevel = 0;
     this.blindTimer = null;
     
-    // Procedurally generated blind structures based on the host's initial setup
     this.blindLevels = [
       { sb: this.initialSmallBlind, bb: this.initialBigBlind },
       { sb: this.initialSmallBlind * 2, bb: this.initialBigBlind * 2 },
@@ -139,7 +136,6 @@ class PokerGame {
     if (seat === -1) return { error: 'Game is full' };
     if (Object.values(this.players).find(p => p.name === name)) return { error: 'Name taken' };
 
-    // Wait For Next Hand Fix: If mid-hand, they are inactive.
     const isMidHand = this.phase !== 'waiting' && this.phase !== 'game_over';
 
     this.players[socketId] = {
@@ -147,8 +143,8 @@ class PokerGame {
       chips: this.startingChips, holeCards: [],
       bet: 0, totalBetThisHand: 0,
       folded: false, allIn: false, 
-      isActive: !isMidHand, // Keeps them out of the current active loop
-      hasActed: false,
+      isActive: !isMidHand,
+      hasActed: false, lastAction: null, // NEW: Tracker added
       rebuyCount: 0, autoRebuy: false, isBusted: false
     };
     this.seats[seat] = socketId;
@@ -188,7 +184,6 @@ class PokerGame {
     this.communityCards = [];
     this.pot = 0;
     
-    // Reset Tournament Blinds
     this.currentBlindLevel = 0;
     this.smallBlind = this.initialSmallBlind;
     this.bigBlind = this.initialBigBlind;
@@ -202,13 +197,13 @@ class PokerGame {
         p.folded = false;
         p.allIn = false;
         p.bet = 0;
+        p.lastAction = null;
     }
   }
 
   startHand() {
     if (this.phase === 'game_over') this.restartGame();
     
-    // Wait For Next Hand Fix: Scoop up anyone who joined mid-hand and activate them
     const active = this.getActivePlayers().filter(p => p.chips > 0);
     if (active.length < 2) return { error: 'Need at least 2 players with chips' };
 
@@ -222,8 +217,8 @@ class PokerGame {
 
     for (const p of active) {
       p.holeCards = []; p.bet = 0; p.totalBetThisHand = 0;
-      p.folded = false; p.allIn = false; p.hasActed = false;
-      p.isActive = true; // Officially "dealt in"
+      p.folded = false; p.allIn = false; p.hasActed = false; p.lastAction = null;
+      p.isActive = true; 
     }
 
     this.dealerSeat = this.nextActiveSeatFrom(this.dealerSeat, active);
@@ -271,6 +266,7 @@ class PokerGame {
     if (player.chips === 0) player.allIn = true;
   }
 
+  // NEW: Stamps the action tag into the state
   playerAction(socketId, action, amount) {
     const player = this.players[socketId];
     if (!player) return { error: 'Player not found' };
@@ -280,16 +276,19 @@ class PokerGame {
     switch (action) {
       case 'fold':
         player.folded = true; player.hasActed = true; player.holeCards = [];
+        player.lastAction = 'FOLD';
         break;
       case 'check':
         if (player.bet < this.currentBet) return { error: 'Cannot check' };
         player.hasActed = true;
+        player.lastAction = 'CHECK';
         break;
       case 'call': {
         const callAmt = Math.min(this.currentBet - player.bet, player.chips);
         player.chips -= callAmt; player.bet += callAmt;
         player.totalBetThisHand += callAmt; this.pot += callAmt;
-        if (player.chips === 0) player.allIn = true;
+        player.lastAction = 'CALL';
+        if (player.chips === 0) { player.allIn = true; player.lastAction = 'ALL-IN'; }
         player.hasActed = true;
         break;
       }
@@ -303,7 +302,8 @@ class PokerGame {
         player.chips -= raiseBy; this.pot += raiseBy;
         player.bet = raiseTotal; player.totalBetThisHand += raiseBy;
         this.currentBet = raiseTotal;
-        if (player.chips === 0) player.allIn = true;
+        player.lastAction = 'RAISE';
+        if (player.chips === 0) { player.allIn = true; player.lastAction = 'ALL-IN'; }
         player.hasActed = true;
         this.getActivePlayersInHand().forEach(p => { if (p.id !== socketId && !p.allIn) p.hasActed = false; });
         break;
@@ -318,6 +318,7 @@ class PokerGame {
         this.pot += allInAmt; player.bet += allInAmt;
         player.totalBetThisHand += allInAmt; player.chips = 0;
         player.allIn = true; player.hasActed = true;
+        player.lastAction = 'ALL-IN';
         break;
       }
       default: return { error: 'Unknown action' };
@@ -352,9 +353,14 @@ class PokerGame {
     return { phase: this.phase, actionSeat: this.actionSeat };
   }
 
+  // NEW: Wipes Check/Call/Raise tags clean, but leaves Fold & All-In visible
   nextStreet() {
     const inHand = this.getActivePlayersInHand();
-    for (const p of inHand) { p.bet = 0; p.hasActed = false; }
+    for (const p of inHand) { 
+        p.bet = 0; 
+        p.hasActed = false; 
+        if (p.lastAction !== 'ALL-IN') p.lastAction = null;
+    }
     this.currentBet = 0;
     this.lastRaiseAmount = this.bigBlind;
 
@@ -420,6 +426,7 @@ class PokerGame {
           p.chips = this.rebuyAmount;
           p.rebuyCount++;
           p.isActive = true;
+          p.lastAction = null; // Clean slate
           results.systemChat = results.systemChat || [];
           results.systemChat.push(`${p.name} automatically rebought for ${this.rebuyAmount} chips.`);
         } else if (!canRebuy) {
@@ -446,6 +453,7 @@ class PokerGame {
           p.chips = this.rebuyAmount;
           p.rebuyCount++;
           p.isActive = true;
+          p.lastAction = null;
           results.systemChat = results.systemChat || [];
           results.systemChat.push(`${p.name} automatically rebought for ${this.rebuyAmount} chips.`);
         } else if (!canRebuy) {
@@ -511,7 +519,7 @@ class PokerGame {
       players[id] = {
         id: p.id, name: p.name, avatarId: p.avatarId, seat: p.seat, chips: p.chips, bet: p.bet,
         folded: p.folded, allIn: p.allIn, isActive: p.isActive, hasActed: p.hasActed, cardCount: p.holeCards.length,
-        rebuyCount: p.rebuyCount, autoRebuy: p.autoRebuy, isBusted: p.isBusted,
+        rebuyCount: p.rebuyCount, autoRebuy: p.autoRebuy, isBusted: p.isBusted, lastAction: p.lastAction,
         holeCards: id === forSocketId ? p.holeCards : (p.holeCards.length > 0 ? [{ rank: '?', suit: '?' }, { rank: '?', suit: '?' }] : []),
       };
     }

@@ -79,7 +79,7 @@ body {
 .showdown-cards { display: flex; justify-content: flex-start; gap: 8px; margin-top: 1rem; }
 .showdown-cards .card-wrapper { width: 55px; height: 77px; }
 
-/* ── SEATS & DYNAMIC SPRITE AVATARS ── */
+/* ── SEATS & AVATARS ── */
 .seat-container { position: absolute; inset: 0; pointer-events: none; }
 .seat { position: absolute; display: flex; flex-direction: column; align-items: center; transform: translate(-50%, -50%); z-index: 10; }
 
@@ -91,20 +91,29 @@ body {
   transition: all 0.3s; position: relative; 
 }
 .seat-avatar.has-sprite { color: transparent !important; }
-
-/* The Cookie Cutter Mask */
-.avatar-sprite {
-  position: absolute; inset: 0; border-radius: 50%; overflow: hidden;
-}
-/* The Zoomed-In Image */
+.avatar-sprite { position: absolute; inset: 0; border-radius: 50%; overflow: hidden; pointer-events: none; }
 .avatar-sprite::before {
-  content: ''; position: absolute;
-  top: 50%; left: 50%; transform: translate(-50%, -50%);
-  width: 145%; height: 145%;
-  background-image: url('/images/Avatar-Select.png');
-  background-size: 500% 300%;
-  background-position: inherit;
+  content: ''; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  width: 145%; height: 145%; background-image: url('/images/Avatar-Select.png'); background-size: 500% 300%; background-position: inherit;
 }
+
+/* NEW: PERSISTENT ACTION TAGS */
+.action-tag {
+  position: absolute; top: -8px; right: -15px; 
+  font-family: 'Orbitron'; font-weight: 900; font-size: 0.65rem; 
+  padding: 3px 6px; border-radius: 4px; z-index: 25; 
+  text-transform: uppercase; letter-spacing: 0.1em;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.5);
+}
+.action-tag.check, .action-tag.call { background: #f8fafc; color: #0f172a; border: 1px solid #cbd5e1; } /* Crisp White */
+.action-tag.fold { background: #334155; color: #94a3b8; border: 1px solid #475569; } /* Dark Grey */
+.action-tag.raise { background: var(--neon-magenta); color: #fff; border: 1px solid #fff; box-shadow: 0 0 10px var(--neon-magenta); }
+.action-tag.allin { 
+  background: var(--neon-magenta); color: #fff; border: 1px solid #fff; 
+  box-shadow: 0 0 15px var(--neon-magenta); 
+  animation: pulse-allin 0.8s infinite alternate; 
+}
+@keyframes pulse-allin { 0% { box-shadow: 0 0 5px var(--neon-magenta); transform: scale(1); } 100% { box-shadow: 0 0 20px var(--neon-magenta); transform: scale(1.1); } }
 
 .seat.occupied .seat-avatar { color: #fff; border-color: rgba(0,243,255,0.6); }
 .seat.is-me .seat-avatar { border-color: var(--neon-cyan); box-shadow: 0 0 20px rgba(0,243,255,0.4); }
@@ -175,6 +184,7 @@ body {
   .my-hand-cards .card-wrapper { width: 80px; height: 110px; }
   .busted-text { font-size: 0.65rem; padding: 2px 4px; top: 10px; }
   .waiting-text { font-size: 0.6rem; padding: 2px 4px; top: 10px; }
+  .action-tag { font-size: 0.55rem; padding: 2px 4px; right: -10px; top: -5px; }
 }
 
 </style>
@@ -226,7 +236,6 @@ body {
     </div>
 
     <div class="action-panel" id="action-panel">
-      <!-- CLOCK UI -->
       <div id="clock-container" style="display:none; margin-bottom: 1.5rem;">
         <div style="font-family:'Orbitron'; font-size:0.6rem; color:var(--neon-cyan); letter-spacing:0.1em; text-align:center; margin-bottom:6px;">SHOT CLOCK</div>
         <div style="width: 100%; height: 8px; background: #020617; border: 1px solid var(--border); border-radius: 4px; overflow: hidden;">
@@ -494,11 +503,17 @@ function renderState(state) {
     const spriteX = spriteCol * 25;
     const spriteY = spriteRow * 50;
 
-    // OVERHAULED SPRITE STRUCTURE TO PREVENT CLIPPING TEXT
     let avatarHtml = `<div class="seat-avatar ${player.avatarId !== undefined ? 'has-sprite' : ''}">`;
     if (player.avatarId !== undefined) {
        avatarHtml += `<div class="avatar-sprite" style="background-position: ${spriteX}% ${spriteY}%"></div>`;
     }
+    
+    // ACTION TAG INJECTION
+    if (player.lastAction) {
+       const actClass = player.lastAction.toLowerCase().replace('-', '');
+       avatarHtml += `<div class="action-tag ${actClass}">${player.lastAction}</div>`;
+    }
+
     if (player.isBusted) {
       avatarHtml += `<div class="busted-text">ELIMINATED</div>`;
     } else if (!player.isActive && state.phase !== 'waiting' && state.phase !== 'game_over') {

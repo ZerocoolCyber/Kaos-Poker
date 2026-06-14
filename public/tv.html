@@ -38,20 +38,39 @@ body { background: var(--bg); color: #fff; font-family: 'Rajdhani', sans-serif; 
 .lb-name { flex: 1; font-size: 1.8rem; font-weight: 700; text-transform: uppercase; }
 .lb-chips { font-family: 'Orbitron'; font-size: 2.2rem; font-weight: 900; color: var(--neon-cyan); }
 
-/* OVERHAULED SPRITE SELECTION */
+/* FIXED TV AVATAR ARCHITECTURE */
 .lb-avatar { 
   width: 60px; height: 60px; border-radius: 50%; border: 2px solid var(--neon-cyan); 
-  margin: 0 1.5rem; position: relative; overflow: hidden; 
+  margin: 0 1.5rem; position: relative; 
 }
-.lb-avatar::before {
+.lb-avatar-inner {
+  position: absolute; inset: 0; border-radius: 50%; overflow: hidden; pointer-events: none;
+}
+.lb-avatar-inner::before {
   content: ''; position: absolute;
   top: 50%; left: 50%; transform: translate(-50%, -50%);
   width: 145%; height: 145%; 
   background-image: url('/images/Avatar-Select.png');
-  background-size: 500% 300%;
-  background-position: inherit; 
-  z-index: -1;
+  background-size: 500% 300%; background-position: inherit; 
 }
+
+/* TV ACTION TAGS */
+.action-tag {
+  position: absolute; top: -10px; right: -15px; 
+  font-family: 'Orbitron'; font-weight: 900; font-size: 0.75rem; 
+  padding: 4px 8px; border-radius: 4px; z-index: 25; 
+  text-transform: uppercase; letter-spacing: 0.1em;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.5);
+}
+.action-tag.check, .action-tag.call { background: #f8fafc; color: #0f172a; border: 1px solid #cbd5e1; }
+.action-tag.fold { background: #334155; color: #94a3b8; border: 1px solid #475569; }
+.action-tag.raise { background: var(--neon-magenta); color: #fff; border: 1px solid #fff; box-shadow: 0 0 10px var(--neon-magenta); }
+.action-tag.allin { 
+  background: var(--neon-magenta); color: #fff; border: 1px solid #fff; 
+  box-shadow: 0 0 15px var(--neon-magenta); 
+  animation: pulse-allin 0.8s infinite alternate; 
+}
+@keyframes pulse-allin { 0% { box-shadow: 0 0 5px var(--neon-magenta); transform: scale(1); } 100% { box-shadow: 0 0 20px var(--neon-magenta); transform: scale(1.1); } }
 
 /* LIVE ACTION */
 .action-view { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; background: var(--panel-bg); border: 1px solid var(--border); border-radius: 8px; position: relative; }
@@ -182,10 +201,19 @@ socket.on('game_state', (state) => {
        tag = '<span style="color:var(--neon-cyan); font-size:1rem; margin-left:1rem;">(WAITING)</span>';
     }
     
+    let actionBadge = '';
+    if (p.lastAction) {
+       const actClass = p.lastAction.toLowerCase().replace('-', '');
+       actionBadge = `<div class="action-tag ${actClass}">${p.lastAction}</div>`;
+    }
+
     lbHtml += `
       <div class="${cls}">
         <div class="lb-rank">#${idx + 1}</div>
-        <div class="lb-avatar" style="background-position: ${spriteX}% ${spriteY}%"></div>
+        <div class="lb-avatar">
+          <div class="lb-avatar-inner" style="background-position: ${spriteX}% ${spriteY}%"></div>
+          ${actionBadge}
+        </div>
         <div class="lb-name">${p.name} ${tag}</div>
         <div class="lb-chips">${p.chips}</div>
       </div>
