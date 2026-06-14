@@ -14,7 +14,24 @@
   .logo-text { font-family: 'Orbitron', sans-serif; font-size: 1.5rem; font-weight: 900; letter-spacing: 0.15em; color: var(--neon-cyan); text-align: center; text-shadow: 0 0 10px rgba(0,243,255,0.4); margin-bottom: 1rem; }
   .profile-section { padding: 1rem; border: 1px solid rgba(255,0,60,0.3); background: rgba(255,0,60,0.05); border-radius: 4px; }
   .avatar-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.5rem; margin-top: 0.8rem; }
-  .avatar-option { width: 100%; aspect-ratio: 1; border-radius: 50%; cursor: pointer; background-image: url('/images/Avatar-Select.png'); background-size: 500% 300%; border: 2px solid transparent; transition: 0.2s; }
+  
+  /* ── FIX: ALIGNED AVATAR LOGIC WITH GAME BOARD ── */
+  .avatar-option { 
+    width: 100%; aspect-ratio: 1; border-radius: 50%; cursor: pointer; 
+    border: 2px solid transparent; transition: 0.2s; 
+    position: relative; overflow: hidden; 
+  }
+  .avatar-sprite {
+    position: absolute; inset: 0; border-radius: 50%; overflow: hidden; pointer-events: none;
+  }
+  .avatar-sprite::before {
+    content: ''; position: absolute;
+    top: 50%; left: 50%; transform: translate(-50%, -50%);
+    width: 145%; height: 145%; 
+    background-image: url('/images/Avatar-Select.png');
+    background-size: 500% 300%;
+    background-position: inherit; 
+  }
   .avatar-option:hover { border-color: rgba(0,243,255,0.5); }
   .avatar-option.selected { border-color: var(--neon-cyan); box-shadow: 0 0 15px rgba(0,243,255,0.6); }
 
@@ -131,7 +148,10 @@
     const div = document.createElement('div');
     div.className = 'avatar-option';
     if(i === 0) div.classList.add('selected');
-    div.style.backgroundPosition = `${col * 25}% ${row * 50}%`;
+    
+    // Wire the inner sprite structure identical to the game board
+    div.innerHTML = `<div class="avatar-sprite" style="background-position: ${col * 25}% ${row * 50}%"></div>`;
+    
     div.onclick = () => {
       document.querySelectorAll('.avatar-option').forEach(el => el.classList.remove('selected'));
       div.classList.add('selected');
@@ -150,7 +170,6 @@
     const type = document.getElementById('game-type').value;
     document.getElementById('blind-duration-container').style.display = type === 'tournament' ? 'flex' : 'none';
     
-    // Auto-adjust rebuy defaults to save user clicks
     document.getElementById('max-rebuys').value = type === 'tournament' ? "0" : "-1";
     toggleRebuyAmount();
   }

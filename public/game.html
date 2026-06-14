@@ -79,11 +79,32 @@ body {
 .showdown-cards { display: flex; justify-content: flex-start; gap: 8px; margin-top: 1rem; }
 .showdown-cards .card-wrapper { width: 55px; height: 77px; }
 
-/* ── SEATS ── */
+/* ── SEATS & DYNAMIC SPRITE AVATARS ── */
 .seat-container { position: absolute; inset: 0; pointer-events: none; }
 .seat { position: absolute; display: flex; flex-direction: column; align-items: center; transform: translate(-50%, -50%); z-index: 10; }
-.seat-avatar { width: 76px; height: 76px; border-radius: 50%; background-color: #0a192f; border: 2px solid rgba(0,243,255,0.2); display: flex; align-items: center; justify-content: center; font-family: 'Orbitron', sans-serif; font-size: 1.6rem; font-weight: 900; color: rgba(0,243,255,0.4); transition: all 0.3s; position: relative; }
-.seat-avatar.has-sprite { color: transparent !important; background-image: url('/images/Avatar-Select.png'); background-size: 500% 300%; }
+
+.seat-avatar { 
+  width: 76px; height: 76px; border-radius: 50%; background-color: #0a192f; 
+  border: 2px solid rgba(0,243,255,0.2); display: flex; align-items: center; 
+  justify-content: center; font-family: 'Orbitron', sans-serif; 
+  font-size: 1.6rem; font-weight: 900; color: rgba(0,243,255,0.4); 
+  transition: all 0.3s; position: relative; 
+}
+.seat-avatar.has-sprite { color: transparent !important; }
+
+/* The Cookie Cutter Mask */
+.avatar-sprite {
+  position: absolute; inset: 0; border-radius: 50%; overflow: hidden;
+}
+/* The Zoomed-In Image */
+.avatar-sprite::before {
+  content: ''; position: absolute;
+  top: 50%; left: 50%; transform: translate(-50%, -50%);
+  width: 145%; height: 145%;
+  background-image: url('/images/Avatar-Select.png');
+  background-size: 500% 300%;
+  background-position: inherit;
+}
 
 .seat.occupied .seat-avatar { color: #fff; border-color: rgba(0,243,255,0.6); }
 .seat.is-me .seat-avatar { border-color: var(--neon-cyan); box-shadow: 0 0 20px rgba(0,243,255,0.4); }
@@ -259,7 +280,7 @@ const sfx = {
   fold: new Audio('/sounds/fold.mp3'),
   chips: new Audio('/sounds/chips.mp3'),
   win: new Audio('/sounds/win.mp3'),
-  alarm: new Audio('/sounds/alarm.mp3') // NEW: The shot clock warning
+  alarm: new Audio('/sounds/alarm.mp3') 
 };
 
 function unlockAudio() {
@@ -322,7 +343,6 @@ socket.on('clock_tick', (data) => {
   if (data.seconds <= 5) {
       bar.style.background = 'var(--neon-magenta)';
       bar.style.boxShadow = '0 0 10px var(--neon-magenta)';
-      // Only blare the alarm if the targeted player is the one sitting at this browser
       if (gameState && gameState.seats[data.actionSeat] === mySocketId) {
           playSfx('alarm');
       }
@@ -346,7 +366,6 @@ socket.on('clock_clear', () => {
 
   if (isHost && document.getElementById('host-btn')) {
       document.getElementById('host-btn').disabled = false;
-      // renderState will overwrite the text on the next update
   }
 });
 
@@ -412,7 +431,6 @@ function renderState(state) {
   document.getElementById('pot-amount').textContent = state.pot;
   document.getElementById('phase-label').textContent = state.phase !== 'waiting' ? `PHASE: ${state.phase}` : '';
 
-  // Host Panel logic upgraded for Call Clock
   if (isHost) {
     document.getElementById('host-panel').style.display = 'block';
     if (state.phase === 'waiting') {
@@ -428,7 +446,6 @@ function renderState(state) {
       document.getElementById('host-btn').style.color = 'var(--neon-magenta)';
       document.getElementById('host-btn').disabled = false;
     } else {
-      // It's mid-hand, so provide the Call Clock button (unless already running)
       if (document.getElementById('clock-container').style.display === 'none' || document.getElementById('clock-container').style.display === '') {
           document.getElementById('host-btn').textContent = 'CALL CLOCK (60S)';
           document.getElementById('host-btn').onclick = callClock;
@@ -477,7 +494,11 @@ function renderState(state) {
     const spriteX = spriteCol * 25;
     const spriteY = spriteRow * 50;
 
-    let avatarHtml = `<div class="seat-avatar has-sprite" style="background-position: ${spriteX}% ${spriteY}%">`;
+    // OVERHAULED SPRITE STRUCTURE TO PREVENT CLIPPING TEXT
+    let avatarHtml = `<div class="seat-avatar ${player.avatarId !== undefined ? 'has-sprite' : ''}">`;
+    if (player.avatarId !== undefined) {
+       avatarHtml += `<div class="avatar-sprite" style="background-position: ${spriteX}% ${spriteY}%"></div>`;
+    }
     if (player.isBusted) {
       avatarHtml += `<div class="busted-text">ELIMINATED</div>`;
     } else if (!player.isActive && state.phase !== 'waiting' && state.phase !== 'game_over') {
@@ -553,7 +574,7 @@ function toggleAutoRebuy(val) { socket.emit('toggle_auto_rebuy', val); }
 function doRebuy() { socket.emit('rebuy'); }
 function startGame() { socket.emit('start_game'); }
 function restartTournament() { socket.emit('restart_tournament'); }
-function callClock() { socket.emit('call_clock'); } // NEW HOST COMMAND
+function callClock() { socket.emit('call_clock'); } 
 
 function doAction(action) {
   if (action === 'fold') playSfx('fold');
