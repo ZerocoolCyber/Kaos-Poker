@@ -59,18 +59,35 @@ body {
 }
 .table-glow.my-turn { opacity: 1; border: 2px solid var(--neon-magenta); box-shadow: 0 0 80px rgba(255,0,60,0.3); }
 
-/* ── COMMUNITY CARDS & SCALING WRAPPERS ── */
+/* ── COMMUNITY CARDS ── */
 .community-area { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; gap: 0.5rem; z-index: 5; }
 .pot-display { font-family: 'Orbitron', sans-serif; font-size: 0.8rem; font-weight: 700; letter-spacing: 0.1em; color: var(--neon-cyan); text-shadow: 0 0 10px rgba(0,243,255,0.5); }
 .pot-amount { color: #fff; font-size: 1.5rem; }
 .community-cards { display: flex; gap: 10px; }
 
-/* ── ANIMATIONS ── */
+/* ── ANIMATIONS & HOLOGRAMS ── */
 @keyframes cyberRez {
   0% { opacity: 0; transform: scale(0.4) translateZ(-100px) rotate(-15deg); filter: blur(5px) brightness(2.5); }
   100% { opacity: 1; transform: scale(1) translateZ(0) rotate(0deg); filter: blur(0) brightness(1); }
 }
 .cyber-rez { animation: cyberRez 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; opacity: 0; }
+
+/* NEW: FLOATING CHAT HOLOGRAM CSS */
+@keyframes floatUpFade {
+  0% { opacity: 0; transform: translate(-50%, -40px) scale(0.5); }
+  15% { opacity: 1; transform: translate(-50%, -55px) scale(1.1); }
+  80% { opacity: 1; transform: translate(-50%, -80px) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -90px) scale(0.8); }
+}
+.floating-chat {
+  position: absolute; z-index: 100;
+  background: rgba(0, 243, 255, 0.15); border: 1px solid var(--neon-cyan);
+  box-shadow: 0 0 15px rgba(0,243,255,0.3); color: #fff;
+  font-family: 'Orbitron', sans-serif; font-size: 0.75rem; font-weight: 700;
+  padding: 6px 12px; border-radius: 8px; pointer-events: none;
+  white-space: nowrap; text-shadow: 0 0 5px rgba(0,243,255,0.8);
+  animation: floatUpFade 3.5s ease-out forwards;
+}
 
 .card-wrapper { transition: transform 0.2s; filter: drop-shadow(0 6px 8px rgba(0,0,0,0.6)); display: flex; flex-shrink: 0; }
 .community-cards .card-wrapper { width: 85px; height: 118px; }
@@ -97,22 +114,14 @@ body {
   width: 145%; height: 145%; background-image: url('/images/Avatar-Select.png'); background-size: 500% 300%; background-position: inherit;
 }
 
-/* NEW: PERSISTENT ACTION TAGS */
 .action-tag {
-  position: absolute; top: -8px; right: -15px; 
-  font-family: 'Orbitron'; font-weight: 900; font-size: 0.65rem; 
-  padding: 3px 6px; border-radius: 4px; z-index: 25; 
-  text-transform: uppercase; letter-spacing: 0.1em;
-  box-shadow: 0 4px 6px rgba(0,0,0,0.5);
+  position: absolute; top: -8px; right: -15px; font-family: 'Orbitron'; font-weight: 900; font-size: 0.65rem; 
+  padding: 3px 6px; border-radius: 4px; z-index: 25; text-transform: uppercase; letter-spacing: 0.1em; box-shadow: 0 4px 6px rgba(0,0,0,0.5);
 }
-.action-tag.check, .action-tag.call { background: #f8fafc; color: #0f172a; border: 1px solid #cbd5e1; } /* Crisp White */
-.action-tag.fold { background: #334155; color: #94a3b8; border: 1px solid #475569; } /* Dark Grey */
+.action-tag.check, .action-tag.call { background: #f8fafc; color: #0f172a; border: 1px solid #cbd5e1; }
+.action-tag.fold { background: #334155; color: #94a3b8; border: 1px solid #475569; }
 .action-tag.raise { background: var(--neon-magenta); color: #fff; border: 1px solid #fff; box-shadow: 0 0 10px var(--neon-magenta); }
-.action-tag.allin { 
-  background: var(--neon-magenta); color: #fff; border: 1px solid #fff; 
-  box-shadow: 0 0 15px var(--neon-magenta); 
-  animation: pulse-allin 0.8s infinite alternate; 
-}
+.action-tag.allin { background: var(--neon-magenta); color: #fff; border: 1px solid #fff; box-shadow: 0 0 15px var(--neon-magenta); animation: pulse-allin 0.8s infinite alternate; }
 @keyframes pulse-allin { 0% { box-shadow: 0 0 5px var(--neon-magenta); transform: scale(1); } 100% { box-shadow: 0 0 20px var(--neon-magenta); transform: scale(1.1); } }
 
 .seat.occupied .seat-avatar { color: #fff; border-color: rgba(0,243,255,0.6); }
@@ -159,7 +168,7 @@ body {
 .overlay.show { display: flex; }
 .box { background: #0a192f; border: 1px solid var(--neon-cyan); padding: 2rem; text-align: center; box-shadow: 0 0 30px rgba(0,243,255,0.1); width: 90%; max-width: 500px; }
 
-/* ── MOBILE RESPONSIVE MEDIA QUERY ── */
+/* ── MOBILE RESPONSIVE ── */
 @media (max-width: 850px) {
   .header { padding: 0.5rem; }
   .header-logo span { font-size: 0.75rem; }
@@ -186,7 +195,6 @@ body {
   .waiting-text { font-size: 0.6rem; padding: 2px 4px; top: 10px; }
   .action-tag { font-size: 0.55rem; padding: 2px 4px; right: -10px; top: -5px; }
 }
-
 </style>
 </head>
 <body>
@@ -284,30 +292,16 @@ body {
 <script>
 // --- AUDIO MANAGER ---
 let audioUnlocked = false;
-const sfx = {
-  deal: new Audio('/sounds/deal.mp3'),
-  fold: new Audio('/sounds/fold.mp3'),
-  chips: new Audio('/sounds/chips.mp3'),
-  win: new Audio('/sounds/win.mp3'),
-  alarm: new Audio('/sounds/alarm.mp3') 
-};
+const sfx = { deal: new Audio('/sounds/deal.mp3'), fold: new Audio('/sounds/fold.mp3'), chips: new Audio('/sounds/chips.mp3'), win: new Audio('/sounds/win.mp3'), alarm: new Audio('/sounds/alarm.mp3') };
 
 function unlockAudio() {
   if (audioUnlocked) return;
-  Object.values(sfx).forEach(sound => {
-    sound.volume = 0; sound.play().catch(()=>{}); sound.pause(); sound.currentTime = 0; sound.volume = 1;
-  });
-  audioUnlocked = true;
-  document.removeEventListener('click', unlockAudio);
+  Object.values(sfx).forEach(sound => { sound.volume = 0; sound.play().catch(()=>{}); sound.pause(); sound.currentTime = 0; sound.volume = 1; });
+  audioUnlocked = true; document.removeEventListener('click', unlockAudio);
 }
 document.addEventListener('click', unlockAudio);
 
-function playSfx(name) {
-  if (audioUnlocked && sfx[name]) {
-    sfx[name].currentTime = 0;
-    sfx[name].play().catch(()=>{});
-  }
-}
+function playSfx(name) { if (audioUnlocked && sfx[name]) { sfx[name].currentTime = 0; sfx[name].play().catch(()=>{}); } }
 
 // --- GAME LOGIC ---
 const params = new URLSearchParams(window.location.search);
@@ -326,111 +320,90 @@ const visualSeats = [
   { left: '50%', top: '5%' },  { left: '25%', top: '5%' },  { left: '5%',  top: '50%' }, { left: '25%', top: '95%' }
 ];
 
-socket.on('connect', () => {
-  mySocketId = socket.id;
-  socket.emit('join_game', { gameId, name: myName, avatarId: myAvatarId, asSpectator: false });
-});
-
+socket.on('connect', () => { mySocketId = socket.id; socket.emit('join_game', { gameId, name: myName, avatarId: myAvatarId, asSpectator: false }); });
 socket.on('hand_started', () => { playSfx('deal'); });
 
 socket.on('game_state', (state) => {
-  if (gameState && state.communityCards.length > prevCommCardsCount) {
-    playSfx('deal'); 
-  }
+  if (gameState && state.communityCards.length > prevCommCardsCount) { playSfx('deal'); }
   prevCommCardsCount = state.communityCards.length;
   gameState = state;
   renderState(state);
 });
 
-// CLOCK ENGINE
 socket.on('clock_tick', (data) => {
   document.getElementById('clock-container').style.display = 'block';
   const pct = (data.seconds / 60) * 100;
-  const bar = document.getElementById('clock-bar');
-  bar.style.width = pct + '%';
-  
+  const bar = document.getElementById('clock-bar'); bar.style.width = pct + '%';
   if (data.seconds <= 5) {
-      bar.style.background = 'var(--neon-magenta)';
-      bar.style.boxShadow = '0 0 10px var(--neon-magenta)';
-      if (gameState && gameState.seats[data.actionSeat] === mySocketId) {
-          playSfx('alarm');
-      }
+      bar.style.background = 'var(--neon-magenta)'; bar.style.boxShadow = '0 0 10px var(--neon-magenta)';
+      if (gameState && gameState.seats[data.actionSeat] === mySocketId) playSfx('alarm');
   } else {
-      bar.style.background = 'var(--neon-cyan)';
-      bar.style.boxShadow = 'none';
+      bar.style.background = 'var(--neon-cyan)'; bar.style.boxShadow = 'none';
   }
-
-  if (isHost && document.getElementById('host-btn')) {
-      document.getElementById('host-btn').textContent = 'CLOCK ACTIVE';
-      document.getElementById('host-btn').disabled = true;
-  }
+  if (isHost && document.getElementById('host-btn')) { document.getElementById('host-btn').textContent = 'CLOCK ACTIVE'; document.getElementById('host-btn').disabled = true; }
 });
 
 socket.on('clock_clear', () => {
   document.getElementById('clock-container').style.display = 'none';
-  const bar = document.getElementById('clock-bar');
-  bar.style.width = '100%';
-  bar.style.background = 'var(--neon-cyan)';
-  bar.style.boxShadow = 'none';
-
-  if (isHost && document.getElementById('host-btn')) {
-      document.getElementById('host-btn').disabled = false;
-  }
+  const bar = document.getElementById('clock-bar'); bar.style.width = '100%'; bar.style.background = 'var(--neon-cyan)'; bar.style.boxShadow = 'none';
+  if (isHost && document.getElementById('host-btn')) document.getElementById('host-btn').disabled = false;
 });
 
 socket.on('showdown', (result) => {
-  playSfx('win');
-  let html = '';
+  playSfx('win'); let html = '';
   result.results.forEach(pot => {
     html += `<div style="margin-bottom:1rem; padding:1rem; background:rgba(0,243,255,0.05); border:1px solid var(--border);">`;
     html += `<strong style="color:var(--neon-magenta); font-family:'Orbitron';">WINNER:</strong> ${pot.players.map(p=>p.name).join(', ')}<br>`;
     html += `<strong style="font-family:'Orbitron';">POT:</strong> <span style="color:var(--neon-cyan); font-weight:bold;">${pot.pot}</span> <br><span style="color:var(--dim)">${pot.handName || 'Folded Around'}</span>`;
-    
     if (pot.bestCards) {
-      html += `<div class="showdown-cards">`;
-      pot.bestCards.forEach(c => { html += getSvgCard(c.rank, c.suit); });
-      html += `</div>`;
+      html += `<div class="showdown-cards">`; pot.bestCards.forEach(c => { html += getSvgCard(c.rank, c.suit); }); html += `</div>`;
     }
     html += `</div>`;
   });
   document.getElementById('showdown-results').innerHTML = html;
   document.getElementById('showdown-overlay').classList.add('show');
-  
   setTimeout(() => document.getElementById('showdown-overlay').classList.remove('show'), 7500);
 });
 
+// NEW: FLOATING HOLOGRAM SPAWNER
 socket.on('chat', (data) => {
+  // 1. Permanent sidebar log
   const box = document.getElementById('chat-messages');
   box.innerHTML += `<div style="margin-bottom:4px"><span style="color:var(--neon-cyan)">[${data.name || 'SYS'}]</span> ${data.msg}</div>`;
   box.scrollTop = box.scrollHeight;
+
+  // 2. The Hologram projection
+  if (!data.system && data.socketId && gameState) {
+      let myIdx = gameState.seats.indexOf(mySocketId);
+      if (myIdx === -1) myIdx = 0;
+      
+      const playerIdx = gameState.seats.indexOf(data.socketId);
+      if (playerIdx !== -1) {
+          const visualIdx = (playerIdx - myIdx + gameState.maxPlayers) % gameState.maxPlayers;
+          const pos = visualSeats[visualIdx];
+
+          const bubble = document.createElement('div');
+          bubble.className = 'floating-chat';
+          
+          let safeMsg = data.msg;
+          if (safeMsg.length > 28) safeMsg = safeMsg.substring(0, 28) + '...';
+          bubble.textContent = safeMsg;
+          
+          bubble.style.left = pos.left;
+          bubble.style.top = pos.top;
+          
+          // Append to the poker table so it survives game_state redraws!
+          document.getElementById('poker-table').appendChild(bubble);
+          setTimeout(() => { if (bubble.parentNode) bubble.remove(); }, 3500);
+      }
+  }
 });
 
 function getSvgCard(rank, suit, faceDown=false) {
-  if (faceDown) {
-    return `<div class="card-wrapper face-down cyber-rez">
-      <img src="/images/card-back.png" alt="Back" style="width:100%; height:100%; border-radius:4px; object-fit:cover; border: 1px solid #334155; background-color: #0f172a;" onerror="this.onerror=null; this.src='/images/logo.png';"/>
-    </div>`;
-  }
-  
-  const isRed = (suit === 'h' || suit === 'd');
-  const textColor = isRed ? '#dc2626' : '#0f172a';
-  const bgColor = '#f8fafc';
-  const borderColor = '#cbd5e1';
-
-  const symbols = { s: '♠', h: '♥', d: '♦', c: '♣' };
-  const s = symbols[suit];
-  const displayRank = rank === 'T' ? '10' : rank;
-  
-  return `<div class="card-wrapper cyber-rez">
-    <svg viewBox="0 0 80 110" preserveAspectRatio="xMidYMid meet" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg" style="display:block;">
-      <rect x="10" y="10" width="60" height="90" rx="4" fill="${bgColor}" stroke="${borderColor}" stroke-width="1.5"/>
-      <text x="20" y="28" fill="${textColor}" font-family="monospace" font-size="16" font-weight="bold" text-anchor="middle">${displayRank}</text>
-      <text x="20" y="44" fill="${textColor}" font-family="sans-serif" font-size="14" text-anchor="middle">${s}</text>
-      <text x="40" y="64" fill="${textColor}" font-family="sans-serif" font-size="32" text-anchor="middle">${s}</text>
-      <text x="60" y="82" fill="${textColor}" font-family="monospace" font-size="16" font-weight="bold" text-anchor="middle" transform="rotate(180 60 82)">${displayRank}</text>
-      <text x="60" y="66" fill="${textColor}" font-family="sans-serif" font-size="14" text-anchor="middle" transform="rotate(180 60 66)">${s}</text>
-    </svg>
-  </div>`;
+  if (faceDown) return `<div class="card-wrapper face-down cyber-rez"><img src="/images/card-back.png" alt="Back" style="width:100%; height:100%; border-radius:4px; object-fit:cover; border: 1px solid #334155; background-color: #0f172a;" onerror="this.onerror=null; this.src='/images/logo.png';"/></div>`;
+  const isRed = (suit === 'h' || suit === 'd'); const textColor = isRed ? '#dc2626' : '#0f172a'; const bgColor = '#f8fafc'; const borderColor = '#cbd5e1';
+  const symbols = { s: '♠', h: '♥', d: '♦', c: '♣' }; const s = symbols[suit]; const displayRank = rank === 'T' ? '10' : rank;
+  return `<div class="card-wrapper cyber-rez"><svg viewBox="0 0 80 110" preserveAspectRatio="xMidYMid meet" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg" style="display:block;"><rect x="10" y="10" width="60" height="90" rx="4" fill="${bgColor}" stroke="${borderColor}" stroke-width="1.5"/><text x="20" y="28" fill="${textColor}" font-family="monospace" font-size="16" font-weight="bold" text-anchor="middle">${displayRank}</text><text x="20" y="44" fill="${textColor}" font-family="sans-serif" font-size="14" text-anchor="middle">${s}</text><text x="40" y="64" fill="${textColor}" font-family="sans-serif" font-size="32" text-anchor="middle">${s}</text><text x="60" y="82" fill="${textColor}" font-family="monospace" font-size="16" font-weight="bold" text-anchor="middle" transform="rotate(180 60 82)">${displayRank}</text><text x="60" y="66" fill="${textColor}" font-family="sans-serif" font-size="14" text-anchor="middle" transform="rotate(180 60 66)">${s}</text></svg></div>`;
 }
 
 function renderState(state) {
@@ -443,24 +416,12 @@ function renderState(state) {
   if (isHost) {
     document.getElementById('host-panel').style.display = 'block';
     if (state.phase === 'waiting') {
-      document.getElementById('host-btn').textContent = 'Init Hand_Sequence';
-      document.getElementById('host-btn').onclick = startGame;
-      document.getElementById('host-btn').style.borderColor = 'var(--neon-cyan)';
-      document.getElementById('host-btn').style.color = 'var(--neon-cyan)';
-      document.getElementById('host-btn').disabled = false;
+      document.getElementById('host-btn').textContent = 'Init Hand_Sequence'; document.getElementById('host-btn').onclick = startGame; document.getElementById('host-btn').style.borderColor = 'var(--neon-cyan)'; document.getElementById('host-btn').style.color = 'var(--neon-cyan)'; document.getElementById('host-btn').disabled = false;
     } else if (state.phase === 'game_over') {
-      document.getElementById('host-btn').textContent = 'RESTART TOURNAMENT';
-      document.getElementById('host-btn').onclick = restartTournament;
-      document.getElementById('host-btn').style.borderColor = 'var(--neon-magenta)';
-      document.getElementById('host-btn').style.color = 'var(--neon-magenta)';
-      document.getElementById('host-btn').disabled = false;
+      document.getElementById('host-btn').textContent = 'RESTART TOURNAMENT'; document.getElementById('host-btn').onclick = restartTournament; document.getElementById('host-btn').style.borderColor = 'var(--neon-magenta)'; document.getElementById('host-btn').style.color = 'var(--neon-magenta)'; document.getElementById('host-btn').disabled = false;
     } else {
       if (document.getElementById('clock-container').style.display === 'none' || document.getElementById('clock-container').style.display === '') {
-          document.getElementById('host-btn').textContent = 'CALL CLOCK (60S)';
-          document.getElementById('host-btn').onclick = callClock;
-          document.getElementById('host-btn').style.borderColor = 'var(--neon-magenta)';
-          document.getElementById('host-btn').style.color = 'var(--neon-magenta)';
-          document.getElementById('host-btn').disabled = false;
+          document.getElementById('host-btn').textContent = 'CALL CLOCK (60S)'; document.getElementById('host-btn').onclick = callClock; document.getElementById('host-btn').style.borderColor = 'var(--neon-magenta)'; document.getElementById('host-btn').style.color = 'var(--neon-magenta)'; document.getElementById('host-btn').disabled = false;
       }
     }
   }
@@ -471,63 +432,43 @@ function renderState(state) {
   const myPlayer = state.players[mySocketId];
 
   if (state.allowRebuy && myPlayer) {
-     document.getElementById('auto-rebuy-box').style.display = 'block';
-     document.getElementById('lbl-rebuy-amt').textContent = state.rebuyAmount;
-     document.getElementById('lbl-rebuy-count').textContent = myPlayer.rebuyCount;
-     document.getElementById('lbl-rebuy-max').innerHTML = state.maxRebuys === -1 ? '&infin;' : state.maxRebuys;
-     document.getElementById('cb-auto-rebuy').checked = myPlayer.autoRebuy;
-  } else {
-     document.getElementById('auto-rebuy-box').style.display = 'none';
-  }
+     document.getElementById('auto-rebuy-box').style.display = 'block'; document.getElementById('lbl-rebuy-amt').textContent = state.rebuyAmount; document.getElementById('lbl-rebuy-count').textContent = myPlayer.rebuyCount; document.getElementById('lbl-rebuy-max').innerHTML = state.maxRebuys === -1 ? '&infin;' : state.maxRebuys; document.getElementById('cb-auto-rebuy').checked = myPlayer.autoRebuy;
+  } else { document.getElementById('auto-rebuy-box').style.display = 'none'; }
 
   let seatsHtml = '';
   for (let i = 0; i < state.maxPlayers; i++) {
-    const sId = state.seats[i];
-    const player = sId ? state.players[sId] : null;
+    const sId = state.seats[i]; const player = sId ? state.players[sId] : null;
     if (!player) continue;
 
-    const visualIdx = (i - myIdx + state.maxPlayers) % state.maxPlayers;
-    const pos = visualSeats[visualIdx];
+    const visualIdx = (i - myIdx + state.maxPlayers) % state.maxPlayers; const pos = visualSeats[visualIdx];
 
     let cls = 'seat occupied';
     if (sId === mySocketId) cls += ' is-me';
     if (player.folded) cls += ' folded';
     if (i === state.actionSeat && state.phase !== 'waiting' && state.phase !== 'game_over') cls += ' active-player';
-    
     if (!player.isActive && !player.isBusted && state.phase !== 'waiting' && state.phase !== 'game_over') cls += ' is-waiting';
     if (player.isBusted) cls += ' is-busted';
 
     const aId = player.avatarId !== undefined ? player.avatarId : 0;
-    const spriteCol = aId % 5;
-    const spriteRow = Math.floor(aId / 5);
-    const spriteX = spriteCol * 25;
-    const spriteY = spriteRow * 50;
+    const spriteX = (aId % 5) * 25; const spriteY = Math.floor(aId / 5) * 50;
 
     let avatarHtml = `<div class="seat-avatar ${player.avatarId !== undefined ? 'has-sprite' : ''}">`;
-    if (player.avatarId !== undefined) {
-       avatarHtml += `<div class="avatar-sprite" style="background-position: ${spriteX}% ${spriteY}%"></div>`;
-    }
+    if (player.avatarId !== undefined) { avatarHtml += `<div class="avatar-sprite" style="background-position: ${spriteX}% ${spriteY}%"></div>`; }
     
-    // ACTION TAG INJECTION
     if (player.lastAction) {
        const actClass = player.lastAction.toLowerCase().replace('-', '');
        avatarHtml += `<div class="action-tag ${actClass}">${player.lastAction}</div>`;
     }
 
-    if (player.isBusted) {
-      avatarHtml += `<div class="busted-text">ELIMINATED</div>`;
-    } else if (!player.isActive && state.phase !== 'waiting' && state.phase !== 'game_over') {
-      avatarHtml += `<div class="waiting-text">WAITING</div>`;
-    }
+    if (player.isBusted) { avatarHtml += `<div class="busted-text">ELIMINATED</div>`;
+    } else if (!player.isActive && state.phase !== 'waiting' && state.phase !== 'game_over') { avatarHtml += `<div class="waiting-text">WAITING</div>`; }
     avatarHtml += `</div>`;
 
     let cardsHtml = '';
     if (!player.folded && player.cardCount > 0 && !player.isBusted) {
       if (sId === mySocketId && player.holeCards.length === 2 && player.holeCards[0].rank !== '?') {
-         document.getElementById('my-cards').innerHTML = getSvgCard(player.holeCards[0].rank, player.holeCards[0].suit) + getSvgCard(player.holeCards[1].rank, player.holeCards[1].suit);
-      } else {
-         cardsHtml = getSvgCard('?', '?', true) + getSvgCard('?', '?', true);
-      }
+         cardsHtml = getSvgCard(player.holeCards[0].rank, player.holeCards[0].suit) + getSvgCard(player.holeCards[1].rank, player.holeCards[1].suit);
+      } else { cardsHtml = getSvgCard('?', '?', true) + getSvgCard('?', '?', true); }
     }
 
     seatsHtml += `
@@ -544,44 +485,27 @@ function renderState(state) {
 
   let commHtml = '';
   for(let i=0; i<5; i++) {
-    commHtml += state.communityCards[i] 
-      ? getSvgCard(state.communityCards[i].rank, state.communityCards[i].suit) 
-      : getSvgCard('?','?', true);
+    commHtml += state.communityCards[i] ? getSvgCard(state.communityCards[i].rank, state.communityCards[i].suit) : getSvgCard('?','?', true);
   }
   document.getElementById('community-cards').innerHTML = commHtml;
 
   const isMyTurn = (state.actionSeat !== -1 && state.seats[state.actionSeat] === mySocketId && state.phase !== 'showdown' && state.phase !== 'game_over');
-  
   document.getElementById('table-glow').className = isMyTurn ? 'table-glow my-turn' : 'table-glow';
-  document.getElementById('not-your-turn').style.display = 'none';
-  document.getElementById('your-turn-controls').style.display = 'none';
-  document.getElementById('manual-rebuy-controls').style.display = 'none';
+  document.getElementById('not-your-turn').style.display = 'none'; document.getElementById('your-turn-controls').style.display = 'none'; document.getElementById('manual-rebuy-controls').style.display = 'none';
 
   if (isMyTurn) {
-    document.getElementById('your-turn-controls').style.display = 'block';
-    const callAmt = Math.max(0, state.currentBet - (myPlayer.bet || 0));
-    document.getElementById('call-amount').textContent = callAmt > 0 ? callAmt : '';
-    document.getElementById('btn-check').style.display = callAmt === 0 ? 'inline-block' : 'none';
-    document.getElementById('btn-call').style.display = callAmt > 0 ? 'inline-block' : 'none';
-    document.getElementById('raise-input').value = state.currentBet + state.bigBlind;
+    document.getElementById('your-turn-controls').style.display = 'block'; const callAmt = Math.max(0, state.currentBet - (myPlayer.bet || 0));
+    document.getElementById('call-amount').textContent = callAmt > 0 ? callAmt : ''; document.getElementById('btn-check').style.display = callAmt === 0 ? 'inline-block' : 'none'; document.getElementById('btn-call').style.display = callAmt > 0 ? 'inline-block' : 'none'; document.getElementById('raise-input').value = state.currentBet + state.bigBlind;
   } else if (state.phase === 'game_over') {
-    document.getElementById('not-your-turn').style.display = 'block';
-    const winner = Object.values(state.players).find(p => !p.isBusted);
-    if (winner) {
-        document.getElementById('not-your-turn').innerHTML = `<span style="color:var(--neon-cyan); font-weight:900; font-size: 1rem; letter-spacing: 0.1em;">🏆 ${winner.name} WINS! 🏆</span>`;
-    }
+    document.getElementById('not-your-turn').style.display = 'block'; const winner = Object.values(state.players).find(p => !p.isBusted);
+    if (winner) document.getElementById('not-your-turn').innerHTML = `<span style="color:var(--neon-cyan); font-weight:900; font-size: 1rem; letter-spacing: 0.1em;">🏆 ${winner.name} WINS! 🏆</span>`;
   } else if (myPlayer && myPlayer.chips === 0 && !myPlayer.isBusted && state.phase === 'waiting' && state.allowRebuy && (state.maxRebuys === -1 || myPlayer.rebuyCount < state.maxRebuys)) {
     document.getElementById('manual-rebuy-controls').style.display = 'block';
   } else {
     document.getElementById('not-your-turn').style.display = 'block';
-    
-    if (myPlayer && myPlayer.isBusted) {
-      document.getElementById('not-your-turn').innerHTML = '<span style="color:var(--neon-magenta); font-weight:900; font-size: 1rem; letter-spacing: 0.2em;">ELIMINATED</span>';
-    } else if (myPlayer && !myPlayer.isActive && state.phase !== 'waiting' && state.phase !== 'game_over') {
-      document.getElementById('not-your-turn').innerHTML = '<span style="color:var(--neon-cyan); font-weight:900; letter-spacing: 0.1em;">WAITING FOR NEXT HAND...</span>';
-    } else {
-      document.getElementById('not-your-turn').innerHTML = 'AWAITING NETWORK ACTION...';
-    }
+    if (myPlayer && myPlayer.isBusted) { document.getElementById('not-your-turn').innerHTML = '<span style="color:var(--neon-magenta); font-weight:900; font-size: 1rem; letter-spacing: 0.2em;">ELIMINATED</span>';
+    } else if (myPlayer && !myPlayer.isActive && state.phase !== 'waiting' && state.phase !== 'game_over') { document.getElementById('not-your-turn').innerHTML = '<span style="color:var(--neon-cyan); font-weight:900; letter-spacing: 0.1em;">WAITING FOR NEXT HAND...</span>';
+    } else { document.getElementById('not-your-turn').innerHTML = 'AWAITING NETWORK ACTION...'; }
   }
 }
 
@@ -590,15 +514,12 @@ function doRebuy() { socket.emit('rebuy'); }
 function startGame() { socket.emit('start_game'); }
 function restartTournament() { socket.emit('restart_tournament'); }
 function callClock() { socket.emit('call_clock'); } 
-
 function doAction(action) {
   if (action === 'fold') playSfx('fold');
   if (action === 'call' || action === 'raise' || action === 'allin') playSfx('chips');
-  
   let amt = action === 'raise' ? parseInt(document.getElementById('raise-input').value) : 0;
   socket.emit('player_action', { action, amount: amt });
 }
-
 function sendChat() {
   const i = document.getElementById('chat-input');
   if(i.value) { socket.emit('chat', {msg: i.value}); i.value=''; }

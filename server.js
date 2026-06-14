@@ -57,7 +57,7 @@ io.on('connection', (socket) => {
     const game = games[gameId];
     if (!game) return;
     
-    clearClock(game, gameId); // Always clear the clock if the phase changes
+    clearClock(game, gameId); 
 
     if (result.phase === 'showdown' || result.phase === 'game_over') {
       if (result.results && result.results.systemChat) {
@@ -165,11 +165,10 @@ io.on('connection', (socket) => {
     broadcastState(currentGameId);
   });
 
-  // HOST: Call the Shot Clock
   socket.on('call_clock', () => {
     const game = getGame();
     if (!game || game.phase === 'waiting' || game.phase === 'showdown' || game.phase === 'game_over') return;
-    if (game.clockTimer) return; // Prevent multiple clicks
+    if (game.clockTimer) return; 
 
     game.clockSeconds = 60;
     io.to(currentGameId).emit('chat', { system: true, msg: `SYSTEM: The Host has called the clock. 60 seconds to act.` });
@@ -203,7 +202,6 @@ io.on('connection', (socket) => {
     const game = getGame();
     if (!game) return;
     
-    // If the active player makes a move, cancel the clock immediately
     if (game.seats[game.actionSeat] === socket.id) {
         clearClock(game, currentGameId);
     }
@@ -253,12 +251,13 @@ io.on('connection', (socket) => {
     }
   });
 
+  // NEW: Updated Chat Endpoint injecting the raw socket.id
   socket.on('chat', ({ msg }) => {
     const game = getGame();
     if (!game) return;
     const player = game.players[socket.id] || game.spectators[socket.id];
     if (!player) return;
-    io.to(currentGameId).emit('chat', { name: player.name, msg });
+    io.to(currentGameId).emit('chat', { name: player.name, msg, socketId: socket.id });
   });
 
   socket.on('disconnect', () => {
