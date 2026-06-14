@@ -21,7 +21,6 @@ function generateGameId() {
 
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 app.get('/game', (req, res) => res.sendFile(path.join(__dirname, 'public', 'game.html')));
-// NEW: Route for the Wallboard TV
 app.get('/tv', (req, res) => res.sendFile(path.join(__dirname, 'public', 'tv.html')));
 
 app.post('/create-game', (req, res) => {
@@ -86,7 +85,6 @@ io.on('connection', (socket) => {
       socket.emit('joined', { seat: result.seat, spectator: false });
     }
 
-    // Don't broadcast chat for the Wallboard joining to keep it clean
     if (!asSpectator) {
         io.to(gameId).emit('chat', { system: true, msg: `${name} joined the network` });
     }
@@ -105,13 +103,23 @@ io.on('connection', (socket) => {
     broadcastState(currentGameId);
   });
 
+  // NEW: Let the host restart an entire tournament after game over
+  socket.on('restart_tournament', () => {
+    const game = getGame();
+    if (!game) return;
+    game.restartGame();
+    io.to(currentGameId).emit('chat', { system: true, msg: 'SYSTEM: The Host has initialized a new Tournament cycle.' });
+    broadcastState(currentGameId);
+  });
+
   socket.on('player_action', ({ action, amount }) => {
     const game = getGame();
     if (!game) return;
     const result = game.playerAction(socket.id, action, amount);
     if (result.error) { socket.emit('error', result.error); return; }
 
-    if (result.phase === 'showdown') {
+    // Check for both showdown and global game_over conditions
+    if (result.phase === 'showdown' || result.phase === 'game_over') {
       if (result.results && result.results.systemChat) {
         result.results.systemChat.forEach(msg => {
           io.to(currentGameId).emit('chat', { system: true, msg });
@@ -119,7 +127,13 @@ io.on('connection', (socket) => {
       }
       io.to(currentGameId).emit('showdown', result);
       broadcastState(currentGameId);
-      startNextHandTimeout(currentGameId, 8000, true); 
+      
+      if (result.phase === 'game_over') {
+         // Announce winner, DO NOT start the next hand timer
+         io.to(currentGameId).emit('chat', { system: true, msg: `🏆 ${result.tournamentWinner.name} IS THE CHAMPION 🏆` });
+      } else {
+         startNextHandTimeout(currentGameId, 8000, true); 
+      }
     } else {
       broadcastState(currentGameId);
     }
@@ -179,11 +193,15 @@ io.on('connection', (socket) => {
     const player = game.players[socket.id];
     const name = player ? player.name : (game.spectators[socket.id] || {}).name;
 
-    if (player && game.phase !== 'waiting' && game.phase !== 'showdown' && game.seats[game.actionSeat] === socket.id) {
+    if (player && game.phase !== 'waiting' && game.phase !== 'showdown' && game.phase !== 'game_over' && game.seats[game.actionSeat] === socket.id) {
         const result = game.playerAction(socket.id, 'fold', 0);
-        if (result && result.phase === 'showdown') {
+        if (result && (result.phase === 'showdown' || result.phase === 'game_over')) {
             io.to(currentGameId).emit('showdown', result);
-            startNextHandTimeout(currentGameId, 8000, true);
+            if (result.phase === 'game_over') {
+                 io.to(currentGameId).emit('chat', { system: true, msg: `🏆 ${result.tournamentWinner.name} IS THE CHAMPION 🏆` });
+            } else {
+                 startNextHandTimeout(currentGameId, 8000, true);
+            }
         }
     }
 
@@ -199,7 +217,7 @@ io.on('connection', (socket) => {
   });
 });
 
-const PORT = process.env.PORT || 3023;
+const PORT = process.env.PORT || 3000;
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`\n♠ Kaos Theory Poker server running at http://localhost:${PORT}`);
 });

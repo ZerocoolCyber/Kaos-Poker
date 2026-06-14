@@ -91,8 +91,7 @@ class PokerGame {
     this.bigBlind = config.bigBlind || 20;
     this.maxPlayers = config.maxPlayers || 8;
     
-    // Rebuy Configuration
-    this.maxRebuys = config.maxRebuys !== undefined ? config.maxRebuys : -1; // -1 = Unlimited
+    this.maxRebuys = config.maxRebuys !== undefined ? config.maxRebuys : -1;
     this.allowRebuy = this.maxRebuys !== 0;
     this.rebuyAmount = config.rebuyAmount || config.startingChips || 1000;
 
@@ -161,12 +160,29 @@ class PokerGame {
   }
 
   canStartGame() {
-    // Check players who are not busted and have chips > 0 OR are willing to auto-rebuy/manually rebought
     const readyPlayers = this.getActivePlayers().filter(p => p.chips > 0 || (p.chips === 0 && p.isActive));
-    return readyPlayers.length >= 2 && this.phase === 'waiting';
+    return readyPlayers.length >= 2 && (this.phase === 'waiting' || this.phase === 'game_over');
+  }
+
+  restartGame() {
+    this.phase = 'waiting';
+    this.handCount = 0;
+    this.communityCards = [];
+    this.pot = 0;
+    for (const p of Object.values(this.players)) {
+        p.chips = this.startingChips;
+        p.isBusted = false;
+        p.isActive = true;
+        p.rebuyCount = 0;
+        p.holeCards = [];
+        p.folded = false;
+        p.allIn = false;
+        p.bet = 0;
+    }
   }
 
   startHand() {
+    if (this.phase === 'game_over') this.restartGame();
     const active = this.getActivePlayers().filter(p => p.chips > 0);
     if (active.length < 2) return { error: 'Need at least 2 players with chips' };
 
@@ -354,16 +370,26 @@ class PokerGame {
     return this.showdown();
   }
 
+  checkGameEnd(baseResult) {
+    const survivors = this.getActivePlayers();
+    if (this.handCount > 0 && survivors.length === 1 && Object.keys(this.players).length > 1) {
+        this.phase = 'game_over';
+        baseResult.phase = 'game_over';
+        baseResult.tournamentWinner = survivors[0];
+    } else {
+        this.phase = 'waiting';
+    }
+    return baseResult;
+  }
+
   showdown() {
     this.phase = 'showdown';
     const inHand = this.getActivePlayersInHand();
     const results = this.calculateWinners(inHand);
     
-    // Process End-of-Hand Eliminations & Auto-Rebuys
     for (const p of this.getActivePlayers()) {
       if (p.chips === 0) {
         const canRebuy = this.allowRebuy && (this.maxRebuys === -1 || p.rebuyCount < this.maxRebuys);
-        
         if (canRebuy && p.autoRebuy) {
           p.chips = this.rebuyAmount;
           p.rebuyCount++;
@@ -374,13 +400,12 @@ class PokerGame {
           p.isBusted = true;
           p.isActive = false;
         } else {
-          p.isActive = false; // Chips are 0, sits out waiting for manual rebuy
+          p.isActive = false; 
         }
       }
     }
 
-    this.phase = 'waiting';
-    return { phase: 'showdown', results, communityCards: this.communityCards };
+    return this.checkGameEnd({ phase: 'showdown', results, communityCards: this.communityCards });
   }
 
   endHand() {
@@ -388,7 +413,6 @@ class PokerGame {
     winner.chips += this.pot;
     const results = [{ players: [winner], pot: this.pot, reason: 'uncontested' }];
     
-    // Process End-of-Hand Eliminations & Auto-Rebuys even if uncontested
     for (const p of this.getActivePlayers()) {
       if (p.chips === 0) {
         const canRebuy = this.allowRebuy && (this.maxRebuys === -1 || p.rebuyCount < this.maxRebuys);
@@ -408,8 +432,7 @@ class PokerGame {
     }
 
     this.pot = 0;
-    this.phase = 'waiting';
-    return { phase: 'showdown', results, communityCards: this.communityCards };
+    return this.checkGameEnd({ phase: 'showdown', results, communityCards: this.communityCards });
   }
 
   calculateWinners(players) {

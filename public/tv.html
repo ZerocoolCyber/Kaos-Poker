@@ -97,7 +97,7 @@ body { background: var(--bg); color: #fff; font-family: 'Rajdhani', sans-serif; 
 <script>
 let socket = io();
 
-// Define getSvgCard consistently for the Wallboard rendering
+// Overhauled to use Matte White and Classic Ink for the TV Board
 function getSvgCard(rank, suit) {
   const isRed = (suit === 'h' || suit === 'd');
   const textColor = isRed ? '#dc2626' : '#0f172a';
@@ -128,7 +128,6 @@ function connectTV() {
   }
 }
 
-// Check if code was passed in URL (e.g., /tv?id=XXXXXX)
 const urlParams = new URLSearchParams(window.location.search);
 if (urlParams.has('id')) {
   document.getElementById('tv-code').value = urlParams.get('id');
@@ -137,7 +136,7 @@ if (urlParams.has('id')) {
 
 socket.on('game_state', (state) => {
   document.getElementById('tv-blinds').textContent = `${state.smallBlind}/${state.bigBlind}`;
-  document.getElementById('tv-phase').textContent = state.phase;
+  document.getElementById('tv-phase').textContent = state.phase === 'game_over' ? 'TOURNAMENT OVER' : state.phase;
   document.getElementById('tv-pot').textContent = state.pot;
 
   // Build Leaderboard
@@ -180,6 +179,11 @@ socket.on('showdown', (result) => {
   document.getElementById('tv-marquee').textContent = `>>> ${winners} <<<`;
 });
 
+socket.on('chat', (data) => {
+  if (data.system && data.msg.includes('HAS WON THE TOURNAMENT')) {
+    document.getElementById('tv-marquee').textContent = `>>> ${data.msg} <<<`;
+  }
+});
 </script>
 </body>
 </html>

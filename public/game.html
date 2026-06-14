@@ -181,7 +181,7 @@ body {
 
   <div class="sidebar">
     <div class="action-panel" id="host-panel" style="display:none">
-      <button class="action-btn" style="width:100%; border-color:var(--neon-cyan)" onclick="startGame()">Init Hand_Sequence</button>
+      <button class="action-btn" id="host-btn" style="width:100%; border-color:var(--neon-cyan)" onclick="startGame()">Init Hand_Sequence</button>
     </div>
 
     <div class="my-hand-panel">
@@ -325,7 +325,6 @@ socket.on('chat', (data) => {
   box.scrollTop = box.scrollHeight;
 });
 
-// OVERHAULED: Matte White background, Classic Red & Matte Charcoal Ink
 function getSvgCard(rank, suit, faceDown=false) {
   if (faceDown) {
     return `<div class="card-wrapper face-down cyber-rez">
@@ -334,9 +333,9 @@ function getSvgCard(rank, suit, faceDown=false) {
   }
   
   const isRed = (suit === 'h' || suit === 'd');
-  const textColor = isRed ? '#dc2626' : '#0f172a'; // Classic Red vs Matte Charcoal
-  const bgColor = '#f8fafc'; // Matte off-white
-  const borderColor = '#cbd5e1'; // Subtle gray
+  const textColor = isRed ? '#dc2626' : '#0f172a';
+  const bgColor = '#f8fafc';
+  const borderColor = '#cbd5e1';
 
   const symbols = { s: '♠', h: '♥', d: '♦', c: '♣' };
   const s = symbols[suit];
@@ -357,10 +356,31 @@ function getSvgCard(rank, suit, faceDown=false) {
 function renderState(state) {
   document.getElementById('hdr-code').textContent = state.gameId;
   document.getElementById('hdr-blinds').textContent = `${state.smallBlind}/${state.bigBlind}`;
+  
+  // Hand Counter wired up correctly
+  document.getElementById('hdr-hand').textContent = `#${state.handCount}`; 
+  
   document.getElementById('pot-amount').textContent = state.pot;
   document.getElementById('phase-label').textContent = state.phase !== 'waiting' ? `PHASE: ${state.phase}` : '';
 
-  if (isHost) document.getElementById('host-panel').style.display = state.phase === 'waiting' ? 'block' : 'none';
+  // Host Panel Logic with Tournament Restart Support
+  if (isHost) {
+    if (state.phase === 'waiting') {
+      document.getElementById('host-panel').style.display = 'block';
+      document.getElementById('host-btn').textContent = 'Init Hand_Sequence';
+      document.getElementById('host-btn').onclick = startGame;
+      document.getElementById('host-btn').style.borderColor = 'var(--neon-cyan)';
+      document.getElementById('host-btn').style.color = 'var(--neon-cyan)';
+    } else if (state.phase === 'game_over') {
+      document.getElementById('host-panel').style.display = 'block';
+      document.getElementById('host-btn').textContent = 'RESTART TOURNAMENT';
+      document.getElementById('host-btn').onclick = restartTournament;
+      document.getElementById('host-btn').style.borderColor = 'var(--neon-magenta)';
+      document.getElementById('host-btn').style.color = 'var(--neon-magenta)';
+    } else {
+      document.getElementById('host-panel').style.display = 'none';
+    }
+  }
 
   let myIdx = state.seats.indexOf(mySocketId);
   if (myIdx === -1) myIdx = 0;
@@ -389,7 +409,7 @@ function renderState(state) {
     let cls = 'seat occupied';
     if (sId === mySocketId) cls += ' is-me';
     if (player.folded) cls += ' folded';
-    if (i === state.actionSeat && state.phase !== 'waiting') cls += ' active-player';
+    if (i === state.actionSeat && state.phase !== 'waiting' && state.phase !== 'game_over') cls += ' active-player';
     if (player.isBusted) cls += ' is-busted';
 
     const aId = player.avatarId !== undefined ? player.avatarId : 0;
@@ -433,7 +453,7 @@ function renderState(state) {
   }
   document.getElementById('community-cards').innerHTML = commHtml;
 
-  const isMyTurn = (state.actionSeat !== -1 && state.seats[state.actionSeat] === mySocketId && state.phase !== 'showdown');
+  const isMyTurn = (state.actionSeat !== -1 && state.seats[state.actionSeat] === mySocketId && state.phase !== 'showdown' && state.phase !== 'game_over');
   
   document.getElementById('table-glow').className = isMyTurn ? 'table-glow my-turn' : 'table-glow';
   document.getElementById('not-your-turn').style.display = 'none';
@@ -447,6 +467,12 @@ function renderState(state) {
     document.getElementById('btn-check').style.display = callAmt === 0 ? 'inline-block' : 'none';
     document.getElementById('btn-call').style.display = callAmt > 0 ? 'inline-block' : 'none';
     document.getElementById('raise-input').value = state.currentBet + state.bigBlind;
+  } else if (state.phase === 'game_over') {
+    document.getElementById('not-your-turn').style.display = 'block';
+    const winner = Object.values(state.players).find(p => !p.isBusted);
+    if (winner) {
+        document.getElementById('not-your-turn').innerHTML = `<span style="color:var(--neon-cyan); font-weight:900; font-size: 1rem; letter-spacing: 0.1em;">🏆 ${winner.name} WINS! 🏆</span>`;
+    }
   } else if (myPlayer && myPlayer.chips === 0 && !myPlayer.isBusted && state.phase === 'waiting' && state.allowRebuy && (state.maxRebuys === -1 || myPlayer.rebuyCount < state.maxRebuys)) {
     document.getElementById('manual-rebuy-controls').style.display = 'block';
   } else {
@@ -462,6 +488,7 @@ function renderState(state) {
 function toggleAutoRebuy(val) { socket.emit('toggle_auto_rebuy', val); }
 function doRebuy() { socket.emit('rebuy'); }
 function startGame() { socket.emit('start_game'); }
+function restartTournament() { socket.emit('restart_tournament'); }
 function doAction(action) {
   if (action === 'fold') playSfx('fold');
   if (action === 'call' || action === 'raise' || action === 'allin') playSfx('chips');
