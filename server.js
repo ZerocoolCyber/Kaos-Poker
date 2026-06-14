@@ -44,6 +44,41 @@ io.on('connection', (socket) => {
     });
   }
 
+  // --- CLOCK MANAGEMENT ---
+  function clearClock(game, gameId) {
+    if (game.clockTimer) {
+      clearInterval(game.clockTimer);
+      game.clockTimer = null;
+      io.to(gameId).emit('clock_clear');
+    }
+  }
+
+  function processGameResult(gameId, result) {
+    const game = games[gameId];
+    if (!game) return;
+    
+    clearClock(game, gameId); // Always clear the clock if the phase changes
+
+    if (result.phase === 'showdown' || result.phase === 'game_over') {
+      if (result.results && result.results.systemChat) {
+        result.results.systemChat.forEach(msg => {
+          io.to(gameId).emit('chat', { system: true, msg });
+        });
+      }
+      io.to(gameId).emit('showdown', result);
+      broadcastState(gameId);
+      
+      if (result.phase === 'game_over') {
+         if (game.blindTimer) { clearInterval(game.blindTimer); game.blindTimer = null; }
+         io.to(gameId).emit('chat', { system: true, msg: `🏆 ${result.tournamentWinner.name} IS THE CHAMPION 🏆` });
+      } else {
+         startNextHandTimeout(gameId, 8000, true); 
+      }
+    } else {
+      broadcastState(gameId);
+    }
+  }
+
   // TOURNAMENT BLIND ESCALATOR
   function checkStartBlindTimer(game, gameId) {
     if (game.gameType !== 'tournament' || game.blindTimer) return;
@@ -112,7 +147,6 @@ io.on('connection', (socket) => {
 
     if (!game.canStartGame()) { socket.emit('error', 'Need at least 2 active players with chips to start'); return; }
     
-    // Kick off the blind escalator on the first hand
     checkStartBlindTimer(game, currentGameId);
 
     const result = game.startHand();
@@ -125,35 +159,59 @@ io.on('connection', (socket) => {
     const game = getGame();
     if (!game) return;
     if (game.blindTimer) { clearInterval(game.blindTimer); game.blindTimer = null; }
+    clearClock(game, currentGameId);
     game.restartGame();
     io.to(currentGameId).emit('chat', { system: true, msg: 'SYSTEM: The Host has initialized a new Tournament cycle.' });
     broadcastState(currentGameId);
   });
 
+  // HOST: Call the Shot Clock
+  socket.on('call_clock', () => {
+    const game = getGame();
+    if (!game || game.phase === 'waiting' || game.phase === 'showdown' || game.phase === 'game_over') return;
+    if (game.clockTimer) return; // Prevent multiple clicks
+
+    game.clockSeconds = 60;
+    io.to(currentGameId).emit('chat', { system: true, msg: `SYSTEM: The Host has called the clock. 60 seconds to act.` });
+    io.to(currentGameId).emit('clock_tick', { seconds: game.clockSeconds, actionSeat: game.actionSeat });
+
+    game.clockTimer = setInterval(() => {
+      game.clockSeconds--;
+      
+      if (game.clockSeconds > 0) {
+         io.to(currentGameId).emit('clock_tick', { seconds: game.clockSeconds, actionSeat: game.actionSeat });
+      }
+
+      if (game.clockSeconds <= 0) {
+        clearClock(game, currentGameId);
+        
+        const activeId = game.seats[game.actionSeat];
+        if (activeId) {
+          const p = game.players[activeId];
+          const callAmt = Math.max(0, game.currentBet - p.bet);
+          const forcedAction = callAmt === 0 ? 'check' : 'fold';
+          
+          io.to(currentGameId).emit('chat', { system: true, msg: `SYSTEM: Time expired. Auto-${forcedAction} applied for ${p.name}.` });
+          const result = game.playerAction(activeId, forcedAction, 0);
+          if (!result.error) processGameResult(currentGameId, result);
+        }
+      }
+    }, 1000);
+  });
+
   socket.on('player_action', ({ action, amount }) => {
     const game = getGame();
     if (!game) return;
+    
+    // If the active player makes a move, cancel the clock immediately
+    if (game.seats[game.actionSeat] === socket.id) {
+        clearClock(game, currentGameId);
+    }
+
     const result = game.playerAction(socket.id, action, amount);
     if (result.error) { socket.emit('error', result.error); return; }
 
-    if (result.phase === 'showdown' || result.phase === 'game_over') {
-      if (result.results && result.results.systemChat) {
-        result.results.systemChat.forEach(msg => {
-          io.to(currentGameId).emit('chat', { system: true, msg });
-        });
-      }
-      io.to(currentGameId).emit('showdown', result);
-      broadcastState(currentGameId);
-      
-      if (result.phase === 'game_over') {
-         if (game.blindTimer) { clearInterval(game.blindTimer); game.blindTimer = null; }
-         io.to(currentGameId).emit('chat', { system: true, msg: `🏆 ${result.tournamentWinner.name} IS THE CHAMPION 🏆` });
-      } else {
-         startNextHandTimeout(currentGameId, 8000, true); 
-      }
-    } else {
-      broadcastState(currentGameId);
-    }
+    processGameResult(currentGameId, result);
   });
 
   socket.on('rebuy', () => {
@@ -211,16 +269,9 @@ io.on('connection', (socket) => {
     const name = player ? player.name : (game.spectators[socket.id] || {}).name;
 
     if (player && game.phase !== 'waiting' && game.phase !== 'showdown' && game.phase !== 'game_over' && game.seats[game.actionSeat] === socket.id) {
+        clearClock(game, currentGameId);
         const result = game.playerAction(socket.id, 'fold', 0);
-        if (result && (result.phase === 'showdown' || result.phase === 'game_over')) {
-            io.to(currentGameId).emit('showdown', result);
-            if (result.phase === 'game_over') {
-                 if (game.blindTimer) { clearInterval(game.blindTimer); game.blindTimer = null; }
-                 io.to(currentGameId).emit('chat', { system: true, msg: `🏆 ${result.tournamentWinner.name} IS THE CHAMPION 🏆` });
-            } else {
-                 startNextHandTimeout(currentGameId, 8000, true);
-            }
-        }
+        if (result) processGameResult(currentGameId, result);
     }
 
     game.removePlayer(socket.id);
@@ -230,6 +281,7 @@ io.on('connection', (socket) => {
     if (Object.keys(game.players).length === 0 && Object.keys(game.spectators).length === 0) {
       if (game.blindTimer) clearInterval(game.blindTimer);
       if (game.nextHandTimer) clearTimeout(game.nextHandTimer);
+      clearClock(game, currentGameId);
       delete games[currentGameId];
     }
   });

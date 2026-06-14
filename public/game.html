@@ -90,12 +90,11 @@ body {
 .seat.active-player .seat-avatar { border-color: var(--neon-magenta); box-shadow: 0 0 25px rgba(255,0,60,0.5); }
 .seat.folded { opacity: 0.4; filter: grayscale(1); }
 .seat.is-busted { opacity: 0.5; filter: grayscale(1) sepia(1) hue-rotate(-50deg); pointer-events: none; }
-
-/* NEW Waiting Tag */
 .seat.is-waiting { opacity: 0.7; pointer-events: none; }
-.waiting-text { position: absolute; color: var(--neon-cyan); font-family: 'Orbitron'; font-weight: 900; font-size: 0.75rem; background: rgba(2,6,23,0.9); padding: 4px 8px; border: 1px solid var(--neon-cyan); border-radius: 4px; z-index: 20; transform: rotate(-10deg); top: 15px; box-shadow: 0 0 10px rgba(0,243,255,0.5); }
 
+.waiting-text { position: absolute; color: var(--neon-cyan); font-family: 'Orbitron'; font-weight: 900; font-size: 0.75rem; background: rgba(2,6,23,0.9); padding: 4px 8px; border: 1px solid var(--neon-cyan); border-radius: 4px; z-index: 20; transform: rotate(-10deg); top: 15px; box-shadow: 0 0 10px rgba(0,243,255,0.5); }
 .busted-text { position: absolute; color: var(--neon-magenta); font-family: 'Orbitron'; font-weight: 900; font-size: 0.85rem; background: rgba(2,6,23,0.9); padding: 4px 8px; border: 1px solid var(--neon-magenta); border-radius: 4px; z-index: 20; transform: rotate(-15deg); top: 15px; box-shadow: 0 0 10px rgba(255,0,60,0.5); }
+
 .seat-name, .seat-chips, .seat-bet { white-space: nowrap; line-height: 1.2; }
 .seat-name { font-size: 0.95rem; font-weight: 700; color: #cbd5e1; background: rgba(2,6,23,0.8); padding: 4px 10px; border-radius: 4px; border: 1px solid var(--border); margin-top: 6px; }
 .seat-chips { font-family: 'Orbitron', sans-serif; font-size: 0.8rem; color: var(--neon-cyan); margin-top: 4px; }
@@ -111,6 +110,7 @@ body {
 .action-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 1rem; }
 .action-btn { padding: 0.8rem; background: rgba(0,243,255,0.05); border: 1px solid var(--border); color: var(--neon-cyan); font-family: 'Orbitron', sans-serif; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; cursor: pointer; transition: 0.2s; }
 .action-btn:hover:not(:disabled) { background: rgba(0,243,255,0.15); box-shadow: 0 0 10px rgba(0,243,255,0.2); }
+.action-btn:disabled { opacity: 0.5; pointer-events: none; filter: grayscale(1); }
 .action-btn.fold-btn { color: #cbd5e1; border-color: rgba(255,255,255,0.2); }
 .action-btn.raise-btn, .action-btn.allin-btn { color: var(--neon-magenta); border-color: rgba(255,0,60,0.3); }
 .action-btn.raise-btn:hover:not(:disabled) { background: rgba(255,0,60,0.1); box-shadow: 0 0 10px rgba(255,0,60,0.2); }
@@ -185,7 +185,7 @@ body {
   </div>
 
   <div class="sidebar">
-    <div class="action-panel" id="host-panel" style="display:none">
+    <div class="action-panel" id="host-panel" style="display:none; padding-bottom: 0;">
       <button class="action-btn" id="host-btn" style="width:100%; border-color:var(--neon-cyan)" onclick="startGame()">Init Hand_Sequence</button>
     </div>
 
@@ -205,6 +205,14 @@ body {
     </div>
 
     <div class="action-panel" id="action-panel">
+      <!-- CLOCK UI -->
+      <div id="clock-container" style="display:none; margin-bottom: 1.5rem;">
+        <div style="font-family:'Orbitron'; font-size:0.6rem; color:var(--neon-cyan); letter-spacing:0.1em; text-align:center; margin-bottom:6px;">SHOT CLOCK</div>
+        <div style="width: 100%; height: 8px; background: #020617; border: 1px solid var(--border); border-radius: 4px; overflow: hidden;">
+          <div id="clock-bar" style="height: 100%; width: 100%; background: var(--neon-cyan); transition: width 1s linear, background 0.3s;"></div>
+        </div>
+      </div>
+
       <div id="not-your-turn" style="text-align:center; color:var(--dim); font-family:'Orbitron'; font-size:0.7rem;">AWAITING NETWORK ACTION...</div>
       
       <div id="your-turn-controls" style="display:none">
@@ -250,7 +258,8 @@ const sfx = {
   deal: new Audio('/sounds/deal.mp3'),
   fold: new Audio('/sounds/fold.mp3'),
   chips: new Audio('/sounds/chips.mp3'),
-  win: new Audio('/sounds/win.mp3')
+  win: new Audio('/sounds/win.mp3'),
+  alarm: new Audio('/sounds/alarm.mp3') // NEW: The shot clock warning
 };
 
 function unlockAudio() {
@@ -301,6 +310,44 @@ socket.on('game_state', (state) => {
   prevCommCardsCount = state.communityCards.length;
   gameState = state;
   renderState(state);
+});
+
+// CLOCK ENGINE
+socket.on('clock_tick', (data) => {
+  document.getElementById('clock-container').style.display = 'block';
+  const pct = (data.seconds / 60) * 100;
+  const bar = document.getElementById('clock-bar');
+  bar.style.width = pct + '%';
+  
+  if (data.seconds <= 5) {
+      bar.style.background = 'var(--neon-magenta)';
+      bar.style.boxShadow = '0 0 10px var(--neon-magenta)';
+      // Only blare the alarm if the targeted player is the one sitting at this browser
+      if (gameState && gameState.seats[data.actionSeat] === mySocketId) {
+          playSfx('alarm');
+      }
+  } else {
+      bar.style.background = 'var(--neon-cyan)';
+      bar.style.boxShadow = 'none';
+  }
+
+  if (isHost && document.getElementById('host-btn')) {
+      document.getElementById('host-btn').textContent = 'CLOCK ACTIVE';
+      document.getElementById('host-btn').disabled = true;
+  }
+});
+
+socket.on('clock_clear', () => {
+  document.getElementById('clock-container').style.display = 'none';
+  const bar = document.getElementById('clock-bar');
+  bar.style.width = '100%';
+  bar.style.background = 'var(--neon-cyan)';
+  bar.style.boxShadow = 'none';
+
+  if (isHost && document.getElementById('host-btn')) {
+      document.getElementById('host-btn').disabled = false;
+      // renderState will overwrite the text on the next update
+  }
 });
 
 socket.on('showdown', (result) => {
@@ -365,21 +412,30 @@ function renderState(state) {
   document.getElementById('pot-amount').textContent = state.pot;
   document.getElementById('phase-label').textContent = state.phase !== 'waiting' ? `PHASE: ${state.phase}` : '';
 
+  // Host Panel logic upgraded for Call Clock
   if (isHost) {
+    document.getElementById('host-panel').style.display = 'block';
     if (state.phase === 'waiting') {
-      document.getElementById('host-panel').style.display = 'block';
       document.getElementById('host-btn').textContent = 'Init Hand_Sequence';
       document.getElementById('host-btn').onclick = startGame;
       document.getElementById('host-btn').style.borderColor = 'var(--neon-cyan)';
       document.getElementById('host-btn').style.color = 'var(--neon-cyan)';
+      document.getElementById('host-btn').disabled = false;
     } else if (state.phase === 'game_over') {
-      document.getElementById('host-panel').style.display = 'block';
       document.getElementById('host-btn').textContent = 'RESTART TOURNAMENT';
       document.getElementById('host-btn').onclick = restartTournament;
       document.getElementById('host-btn').style.borderColor = 'var(--neon-magenta)';
       document.getElementById('host-btn').style.color = 'var(--neon-magenta)';
+      document.getElementById('host-btn').disabled = false;
     } else {
-      document.getElementById('host-panel').style.display = 'none';
+      // It's mid-hand, so provide the Call Clock button (unless already running)
+      if (document.getElementById('clock-container').style.display === 'none' || document.getElementById('clock-container').style.display === '') {
+          document.getElementById('host-btn').textContent = 'CALL CLOCK (60S)';
+          document.getElementById('host-btn').onclick = callClock;
+          document.getElementById('host-btn').style.borderColor = 'var(--neon-magenta)';
+          document.getElementById('host-btn').style.color = 'var(--neon-magenta)';
+          document.getElementById('host-btn').disabled = false;
+      }
     }
   }
 
@@ -412,7 +468,6 @@ function renderState(state) {
     if (player.folded) cls += ' folded';
     if (i === state.actionSeat && state.phase !== 'waiting' && state.phase !== 'game_over') cls += ' active-player';
     
-    // NEW: Ghost players who joined mid-hand and are waiting for the next deal
     if (!player.isActive && !player.isBusted && state.phase !== 'waiting' && state.phase !== 'game_over') cls += ' is-waiting';
     if (player.isBusted) cls += ' is-busted';
 
@@ -484,7 +539,6 @@ function renderState(state) {
   } else {
     document.getElementById('not-your-turn').style.display = 'block';
     
-    // NEW: Action panel status for users joining mid-hand
     if (myPlayer && myPlayer.isBusted) {
       document.getElementById('not-your-turn').innerHTML = '<span style="color:var(--neon-magenta); font-weight:900; font-size: 1rem; letter-spacing: 0.2em;">ELIMINATED</span>';
     } else if (myPlayer && !myPlayer.isActive && state.phase !== 'waiting' && state.phase !== 'game_over') {
@@ -499,6 +553,8 @@ function toggleAutoRebuy(val) { socket.emit('toggle_auto_rebuy', val); }
 function doRebuy() { socket.emit('rebuy'); }
 function startGame() { socket.emit('start_game'); }
 function restartTournament() { socket.emit('restart_tournament'); }
+function callClock() { socket.emit('call_clock'); } // NEW HOST COMMAND
+
 function doAction(action) {
   if (action === 'fold') playSfx('fold');
   if (action === 'call' || action === 'raise' || action === 'allin') playSfx('chips');
@@ -506,6 +562,7 @@ function doAction(action) {
   let amt = action === 'raise' ? parseInt(document.getElementById('raise-input').value) : 0;
   socket.emit('player_action', { action, amount: amt });
 }
+
 function sendChat() {
   const i = document.getElementById('chat-input');
   if(i.value) { socket.emit('chat', {msg: i.value}); i.value=''; }
