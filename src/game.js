@@ -87,22 +87,35 @@ class PokerGame {
     this.mode = config.mode || 'lan'; 
     this.gameType = config.gameType || 'cash'; 
     this.startingChips = config.startingChips || 1000;
-    this.smallBlind = config.smallBlind || 10;
-    this.bigBlind = config.bigBlind || 20;
     this.maxPlayers = config.maxPlayers || 8;
     
+    // Core Blinds
+    this.initialSmallBlind = config.smallBlind || 10;
+    this.initialBigBlind = config.bigBlind || 20;
+    this.smallBlind = this.initialSmallBlind;
+    this.bigBlind = this.initialBigBlind;
+
     this.maxRebuys = config.maxRebuys !== undefined ? config.maxRebuys : -1;
     this.allowRebuy = this.maxRebuys !== 0;
     this.rebuyAmount = config.rebuyAmount || config.startingChips || 1000;
 
-    this.blindLevels = config.blindLevels || [
-      { sb: 10, bb: 20 }, { sb: 15, bb: 30 }, { sb: 25, bb: 50 },
-      { sb: 50, bb: 100 }, { sb: 75, bb: 150 }, { sb: 100, bb: 200 },
-      { sb: 150, bb: 300 }, { sb: 200, bb: 400 }
-    ];
-    this.blindLevelDuration = config.blindLevelDuration || 15; 
+    // Tournament Escalator Dynamics
+    this.blindLevelDuration = config.blindDuration || 15; 
     this.currentBlindLevel = 0;
     this.blindTimer = null;
+    
+    // Procedurally generated blind structures based on the host's initial setup
+    this.blindLevels = [
+      { sb: this.initialSmallBlind, bb: this.initialBigBlind },
+      { sb: this.initialSmallBlind * 2, bb: this.initialBigBlind * 2 },
+      { sb: this.initialSmallBlind * 3, bb: this.initialBigBlind * 3 },
+      { sb: this.initialSmallBlind * 5, bb: this.initialBigBlind * 5 },
+      { sb: this.initialSmallBlind * 10, bb: this.initialBigBlind * 10 },
+      { sb: this.initialSmallBlind * 15, bb: this.initialBigBlind * 15 },
+      { sb: this.initialSmallBlind * 20, bb: this.initialBigBlind * 20 },
+      { sb: this.initialSmallBlind * 30, bb: this.initialBigBlind * 30 },
+      { sb: this.initialSmallBlind * 50, bb: this.initialBigBlind * 50 },
+    ];
 
     this.players = {}; 
     this.spectators = {};
@@ -126,11 +139,16 @@ class PokerGame {
     if (seat === -1) return { error: 'Game is full' };
     if (Object.values(this.players).find(p => p.name === name)) return { error: 'Name taken' };
 
+    // Wait For Next Hand Fix: If mid-hand, they are inactive.
+    const isMidHand = this.phase !== 'waiting' && this.phase !== 'game_over';
+
     this.players[socketId] = {
       id: socketId, name, avatarId, seat,
       chips: this.startingChips, holeCards: [],
       bet: 0, totalBetThisHand: 0,
-      folded: false, allIn: false, isActive: true, hasActed: false,
+      folded: false, allIn: false, 
+      isActive: !isMidHand, // Keeps them out of the current active loop
+      hasActed: false,
       rebuyCount: 0, autoRebuy: false, isBusted: false
     };
     this.seats[seat] = socketId;
@@ -169,6 +187,12 @@ class PokerGame {
     this.handCount = 0;
     this.communityCards = [];
     this.pot = 0;
+    
+    // Reset Tournament Blinds
+    this.currentBlindLevel = 0;
+    this.smallBlind = this.initialSmallBlind;
+    this.bigBlind = this.initialBigBlind;
+
     for (const p of Object.values(this.players)) {
         p.chips = this.startingChips;
         p.isBusted = false;
@@ -183,6 +207,8 @@ class PokerGame {
 
   startHand() {
     if (this.phase === 'game_over') this.restartGame();
+    
+    // Wait For Next Hand Fix: Scoop up anyone who joined mid-hand and activate them
     const active = this.getActivePlayers().filter(p => p.chips > 0);
     if (active.length < 2) return { error: 'Need at least 2 players with chips' };
 
@@ -197,7 +223,7 @@ class PokerGame {
     for (const p of active) {
       p.holeCards = []; p.bet = 0; p.totalBetThisHand = 0;
       p.folded = false; p.allIn = false; p.hasActed = false;
-      p.isActive = true;
+      p.isActive = true; // Officially "dealt in"
     }
 
     this.dealerSeat = this.nextActiveSeatFrom(this.dealerSeat, active);
@@ -249,7 +275,7 @@ class PokerGame {
     const player = this.players[socketId];
     if (!player) return { error: 'Player not found' };
     if (player.seat !== this.actionSeat) return { error: 'Not your turn' };
-    if (player.folded || player.allIn) return { error: 'Cannot act' };
+    if (player.folded || player.allIn || !player.isActive) return { error: 'Cannot act' };
 
     switch (action) {
       case 'fold':
@@ -311,7 +337,7 @@ class PokerGame {
       return this.nextStreet();
     }
 
-    const active = this.getActivePlayers();
+    const active = this.getActivePlayersInHand();
     let nextSeat = this.actionSeat;
     let found = false;
     for (let i = 0; i < this.maxPlayers; i++) {
@@ -346,7 +372,7 @@ class PokerGame {
       return this.showdown();
     }
 
-    const active = this.getActivePlayers();
+    const active = this.getActivePlayersInHand();
     const notAllIn = inHand.filter(p => !p.allIn);
     if (notAllIn.length <= 1) return this.runItOut();
 

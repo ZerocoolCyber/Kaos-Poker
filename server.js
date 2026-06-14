@@ -44,6 +44,20 @@ io.on('connection', (socket) => {
     });
   }
 
+  // TOURNAMENT BLIND ESCALATOR
+  function checkStartBlindTimer(game, gameId) {
+    if (game.gameType !== 'tournament' || game.blindTimer) return;
+    game.blindTimer = setInterval(() => {
+        if (game.currentBlindLevel < game.blindLevels.length - 1) {
+            game.currentBlindLevel++;
+            game.smallBlind = game.blindLevels[game.currentBlindLevel].sb;
+            game.bigBlind = game.blindLevels[game.currentBlindLevel].bb;
+            io.to(gameId).emit('chat', { system: true, msg: `⚠️ TOURNAMENT UPDATE: Blinds have increased to ${game.smallBlind}/${game.bigBlind}` });
+            broadcastState(gameId);
+        }
+    }, game.blindLevelDuration * 60 * 1000);
+  }
+
   function startNextHandTimeout(gameId, delay = 8000, override = false) {
     const g = games[gameId];
     if (!g) return;
@@ -54,7 +68,7 @@ io.on('connection', (socket) => {
     
     g.nextHandTimer = setTimeout(() => {
       g.nextHandTimer = null; 
-      const active = g.getActivePlayers().filter(p => p.chips > 0);
+      const active = g.getActivePlayers().filter(p => p.chips > 0 || (p.chips === 0 && p.isActive));
       if (active.length >= 2 && g.phase === 'waiting') {
         const r = g.startHand();
         if (!r.error) {
@@ -97,16 +111,20 @@ io.on('connection', (socket) => {
     if (game.nextHandTimer) clearTimeout(game.nextHandTimer); 
 
     if (!game.canStartGame()) { socket.emit('error', 'Need at least 2 active players with chips to start'); return; }
+    
+    // Kick off the blind escalator on the first hand
+    checkStartBlindTimer(game, currentGameId);
+
     const result = game.startHand();
     if (result.error) { socket.emit('error', result.error); return; }
     io.to(currentGameId).emit('hand_started', { dealerSeat: result.dealerSeat });
     broadcastState(currentGameId);
   });
 
-  // NEW: Let the host restart an entire tournament after game over
   socket.on('restart_tournament', () => {
     const game = getGame();
     if (!game) return;
+    if (game.blindTimer) { clearInterval(game.blindTimer); game.blindTimer = null; }
     game.restartGame();
     io.to(currentGameId).emit('chat', { system: true, msg: 'SYSTEM: The Host has initialized a new Tournament cycle.' });
     broadcastState(currentGameId);
@@ -118,7 +136,6 @@ io.on('connection', (socket) => {
     const result = game.playerAction(socket.id, action, amount);
     if (result.error) { socket.emit('error', result.error); return; }
 
-    // Check for both showdown and global game_over conditions
     if (result.phase === 'showdown' || result.phase === 'game_over') {
       if (result.results && result.results.systemChat) {
         result.results.systemChat.forEach(msg => {
@@ -129,7 +146,7 @@ io.on('connection', (socket) => {
       broadcastState(currentGameId);
       
       if (result.phase === 'game_over') {
-         // Announce winner, DO NOT start the next hand timer
+         if (game.blindTimer) { clearInterval(game.blindTimer); game.blindTimer = null; }
          io.to(currentGameId).emit('chat', { system: true, msg: `🏆 ${result.tournamentWinner.name} IS THE CHAMPION 🏆` });
       } else {
          startNextHandTimeout(currentGameId, 8000, true); 
@@ -198,6 +215,7 @@ io.on('connection', (socket) => {
         if (result && (result.phase === 'showdown' || result.phase === 'game_over')) {
             io.to(currentGameId).emit('showdown', result);
             if (result.phase === 'game_over') {
+                 if (game.blindTimer) { clearInterval(game.blindTimer); game.blindTimer = null; }
                  io.to(currentGameId).emit('chat', { system: true, msg: `🏆 ${result.tournamentWinner.name} IS THE CHAMPION 🏆` });
             } else {
                  startNextHandTimeout(currentGameId, 8000, true);

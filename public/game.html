@@ -91,6 +91,10 @@ body {
 .seat.folded { opacity: 0.4; filter: grayscale(1); }
 .seat.is-busted { opacity: 0.5; filter: grayscale(1) sepia(1) hue-rotate(-50deg); pointer-events: none; }
 
+/* NEW Waiting Tag */
+.seat.is-waiting { opacity: 0.7; pointer-events: none; }
+.waiting-text { position: absolute; color: var(--neon-cyan); font-family: 'Orbitron'; font-weight: 900; font-size: 0.75rem; background: rgba(2,6,23,0.9); padding: 4px 8px; border: 1px solid var(--neon-cyan); border-radius: 4px; z-index: 20; transform: rotate(-10deg); top: 15px; box-shadow: 0 0 10px rgba(0,243,255,0.5); }
+
 .busted-text { position: absolute; color: var(--neon-magenta); font-family: 'Orbitron'; font-weight: 900; font-size: 0.85rem; background: rgba(2,6,23,0.9); padding: 4px 8px; border: 1px solid var(--neon-magenta); border-radius: 4px; z-index: 20; transform: rotate(-15deg); top: 15px; box-shadow: 0 0 10px rgba(255,0,60,0.5); }
 .seat-name, .seat-chips, .seat-bet { white-space: nowrap; line-height: 1.2; }
 .seat-name { font-size: 0.95rem; font-weight: 700; color: #cbd5e1; background: rgba(2,6,23,0.8); padding: 4px 10px; border-radius: 4px; border: 1px solid var(--border); margin-top: 6px; }
@@ -149,6 +153,7 @@ body {
   .pot-amount { font-size: 1.2rem; }
   .my-hand-cards .card-wrapper { width: 80px; height: 110px; }
   .busted-text { font-size: 0.65rem; padding: 2px 4px; top: 10px; }
+  .waiting-text { font-size: 0.6rem; padding: 2px 4px; top: 10px; }
 }
 
 </style>
@@ -356,14 +361,10 @@ function getSvgCard(rank, suit, faceDown=false) {
 function renderState(state) {
   document.getElementById('hdr-code').textContent = state.gameId;
   document.getElementById('hdr-blinds').textContent = `${state.smallBlind}/${state.bigBlind}`;
-  
-  // Hand Counter wired up correctly
   document.getElementById('hdr-hand').textContent = `#${state.handCount}`; 
-  
   document.getElementById('pot-amount').textContent = state.pot;
   document.getElementById('phase-label').textContent = state.phase !== 'waiting' ? `PHASE: ${state.phase}` : '';
 
-  // Host Panel Logic with Tournament Restart Support
   if (isHost) {
     if (state.phase === 'waiting') {
       document.getElementById('host-panel').style.display = 'block';
@@ -410,6 +411,9 @@ function renderState(state) {
     if (sId === mySocketId) cls += ' is-me';
     if (player.folded) cls += ' folded';
     if (i === state.actionSeat && state.phase !== 'waiting' && state.phase !== 'game_over') cls += ' active-player';
+    
+    // NEW: Ghost players who joined mid-hand and are waiting for the next deal
+    if (!player.isActive && !player.isBusted && state.phase !== 'waiting' && state.phase !== 'game_over') cls += ' is-waiting';
     if (player.isBusted) cls += ' is-busted';
 
     const aId = player.avatarId !== undefined ? player.avatarId : 0;
@@ -421,6 +425,8 @@ function renderState(state) {
     let avatarHtml = `<div class="seat-avatar has-sprite" style="background-position: ${spriteX}% ${spriteY}%">`;
     if (player.isBusted) {
       avatarHtml += `<div class="busted-text">ELIMINATED</div>`;
+    } else if (!player.isActive && state.phase !== 'waiting' && state.phase !== 'game_over') {
+      avatarHtml += `<div class="waiting-text">WAITING</div>`;
     }
     avatarHtml += `</div>`;
 
@@ -477,8 +483,12 @@ function renderState(state) {
     document.getElementById('manual-rebuy-controls').style.display = 'block';
   } else {
     document.getElementById('not-your-turn').style.display = 'block';
+    
+    // NEW: Action panel status for users joining mid-hand
     if (myPlayer && myPlayer.isBusted) {
       document.getElementById('not-your-turn').innerHTML = '<span style="color:var(--neon-magenta); font-weight:900; font-size: 1rem; letter-spacing: 0.2em;">ELIMINATED</span>';
+    } else if (myPlayer && !myPlayer.isActive && state.phase !== 'waiting' && state.phase !== 'game_over') {
+      document.getElementById('not-your-turn').innerHTML = '<span style="color:var(--neon-cyan); font-weight:900; letter-spacing: 0.1em;">WAITING FOR NEXT HAND...</span>';
     } else {
       document.getElementById('not-your-turn').innerHTML = 'AWAITING NETWORK ACTION...';
     }

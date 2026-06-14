@@ -33,6 +33,7 @@ body { background: var(--bg); color: #fff; font-family: 'Rajdhani', sans-serif; 
 .lb-title { font-family: 'Orbitron'; font-size: 1.5rem; color: var(--neon-cyan); letter-spacing: 0.1em; border-bottom: 1px solid var(--border); padding-bottom: 0.5rem; }
 .lb-row { display: flex; align-items: center; background: var(--panel-bg); border: 1px solid var(--border); padding: 1rem; border-radius: 8px; transition: transform 0.3s; }
 .lb-row.busted { opacity: 0.4; filter: grayscale(1); }
+.lb-row.waiting { opacity: 0.7; }
 .lb-rank { font-family: 'Orbitron'; font-size: 2rem; font-weight: 900; color: #445b73; width: 50px; text-align: center; }
 .lb-avatar { width: 60px; height: 60px; border-radius: 50%; border: 2px solid var(--neon-cyan); background-image: url('/images/Avatar-Select.png'); background-size: 500% 300%; margin: 0 1.5rem; }
 .lb-name { flex: 1; font-size: 1.8rem; font-weight: 700; text-transform: uppercase; }
@@ -97,7 +98,6 @@ body { background: var(--bg); color: #fff; font-family: 'Rajdhani', sans-serif; 
 <script>
 let socket = io();
 
-// Overhauled to use Matte White and Classic Ink for the TV Board
 function getSvgCard(rank, suit) {
   const isRed = (suit === 'h' || suit === 'd');
   const textColor = isRed ? '#dc2626' : '#0f172a';
@@ -150,13 +150,22 @@ socket.on('game_state', (state) => {
     const aId = p.avatarId !== undefined ? p.avatarId : 0;
     const spriteX = (aId % 5) * 25;
     const spriteY = Math.floor(aId / 5) * 50;
-    const cls = p.isBusted ? 'lb-row busted' : 'lb-row';
+    
+    let cls = 'lb-row';
+    let tag = '';
+    if (p.isBusted) {
+       cls += ' busted';
+       tag = '<span style="color:var(--neon-magenta); font-size:1rem; margin-left:1rem;">(ELIMINATED)</span>';
+    } else if (!p.isActive && state.phase !== 'waiting' && state.phase !== 'game_over') {
+       cls += ' waiting';
+       tag = '<span style="color:var(--neon-cyan); font-size:1rem; margin-left:1rem;">(WAITING)</span>';
+    }
     
     lbHtml += `
       <div class="${cls}">
         <div class="lb-rank">#${idx + 1}</div>
         <div class="lb-avatar" style="background-position: ${spriteX}% ${spriteY}%"></div>
-        <div class="lb-name">${p.name} ${p.isBusted ? '<span style="color:var(--neon-magenta); font-size:1rem;">(OUT)</span>' : ''}</div>
+        <div class="lb-name">${p.name} ${tag}</div>
         <div class="lb-chips">${p.chips}</div>
       </div>
     `;
@@ -180,7 +189,7 @@ socket.on('showdown', (result) => {
 });
 
 socket.on('chat', (data) => {
-  if (data.system && data.msg.includes('HAS WON THE TOURNAMENT')) {
+  if (data.system && data.msg.includes('IS THE CHAMPION')) {
     document.getElementById('tv-marquee').textContent = `>>> ${data.msg} <<<`;
   }
 });
