@@ -120,6 +120,8 @@ class PokerGame {
     this.chat = [];
 
     this.phase = 'waiting'; 
+    this.isContested = false; // Tracks if cards should be revealed
+
     this.deck = [];
     this.communityCards = [];
     this.pot = 0;
@@ -144,7 +146,7 @@ class PokerGame {
       bet: 0, totalBetThisHand: 0,
       folded: false, allIn: false, 
       isActive: !isMidHand,
-      hasActed: false, lastAction: null, // NEW: Tracker added
+      hasActed: false, lastAction: null,
       rebuyCount: 0, autoRebuy: false, isBusted: false
     };
     this.seats[seat] = socketId;
@@ -175,7 +177,8 @@ class PokerGame {
 
   canStartGame() {
     const readyPlayers = this.getActivePlayers().filter(p => p.chips > 0 || (p.chips === 0 && p.isActive));
-    return readyPlayers.length >= 2 && (this.phase === 'waiting' || this.phase === 'game_over');
+    // FIX: Allows the host to force-start a hand even during the 8-second showdown delay
+    return readyPlayers.length >= 2 && (this.phase === 'waiting' || this.phase === 'game_over' || this.phase === 'showdown');
   }
 
   restartGame() {
@@ -214,6 +217,7 @@ class PokerGame {
     this.sidePots = [];
     this.currentBet = 0;
     this.lastRaiseAmount = this.bigBlind;
+    this.isContested = false;
 
     for (const p of active) {
       p.holeCards = []; p.bet = 0; p.totalBetThisHand = 0;
@@ -266,7 +270,6 @@ class PokerGame {
     if (player.chips === 0) player.allIn = true;
   }
 
-  // NEW: Stamps the action tag into the state
   playerAction(socketId, action, amount) {
     const player = this.players[socketId];
     if (!player) return { error: 'Player not found' };
@@ -353,7 +356,6 @@ class PokerGame {
     return { phase: this.phase, actionSeat: this.actionSeat };
   }
 
-  // NEW: Wipes Check/Call/Raise tags clean, but leaves Fold & All-In visible
   nextStreet() {
     const inHand = this.getActivePlayersInHand();
     for (const p of inHand) { 
@@ -409,13 +411,15 @@ class PokerGame {
         baseResult.phase = 'game_over';
         baseResult.tournamentWinner = survivors[0];
     } else {
-        this.phase = 'waiting';
+        // FIX: Freeze the state on showdown so cards stay decrypted during the 8-second delay!
+        this.phase = 'showdown'; 
     }
     return baseResult;
   }
 
   showdown() {
     this.phase = 'showdown';
+    this.isContested = true; // Tell the server it is safe to unencrypt the cards
     const inHand = this.getActivePlayersInHand();
     const results = this.calculateWinners(inHand);
     
@@ -426,7 +430,7 @@ class PokerGame {
           p.chips = this.rebuyAmount;
           p.rebuyCount++;
           p.isActive = true;
-          p.lastAction = null; // Clean slate
+          p.lastAction = null;
           results.systemChat = results.systemChat || [];
           results.systemChat.push(`${p.name} automatically rebought for ${this.rebuyAmount} chips.`);
         } else if (!canRebuy) {
@@ -442,6 +446,9 @@ class PokerGame {
   }
 
   endHand() {
+    this.phase = 'showdown';
+    this.isContested = false; // Hand was uncontested (everyone else folded). Keep cards hidden!
+
     const winner = this.getActivePlayersInHand()[0];
     winner.chips += this.pot;
     const results = [{ players: [winner], pot: this.pot, reason: 'uncontested' }];
@@ -514,13 +521,16 @@ class PokerGame {
   }
 
   getRoomState(forSocketId) {
+    // FIX: Unencrypt the hole cards officially on the server if it's a contested showdown!
+    const revealCards = this.phase === 'game_over' || (this.phase === 'showdown' && this.isContested);
+
     const players = {};
     for (const [id, p] of Object.entries(this.players)) {
       players[id] = {
         id: p.id, name: p.name, avatarId: p.avatarId, seat: p.seat, chips: p.chips, bet: p.bet,
         folded: p.folded, allIn: p.allIn, isActive: p.isActive, hasActed: p.hasActed, cardCount: p.holeCards.length,
         rebuyCount: p.rebuyCount, autoRebuy: p.autoRebuy, isBusted: p.isBusted, lastAction: p.lastAction,
-        holeCards: id === forSocketId ? p.holeCards : (p.holeCards.length > 0 ? [{ rank: '?', suit: '?' }, { rank: '?', suit: '?' }] : []),
+        holeCards: (id === forSocketId || revealCards) ? p.holeCards : (p.holeCards.length > 0 ? [{ rank: '?', suit: '?' }, { rank: '?', suit: '?' }] : []),
       };
     }
     return {

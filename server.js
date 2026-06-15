@@ -44,7 +44,6 @@ io.on('connection', (socket) => {
     });
   }
 
-  // --- CLOCK MANAGEMENT ---
   function clearClock(game, gameId) {
     if (game.clockTimer) {
       clearInterval(game.clockTimer);
@@ -79,7 +78,6 @@ io.on('connection', (socket) => {
     }
   }
 
-  // TOURNAMENT BLIND ESCALATOR
   function checkStartBlindTimer(game, gameId) {
     if (game.gameType !== 'tournament' || game.blindTimer) return;
     game.blindTimer = setInterval(() => {
@@ -104,7 +102,9 @@ io.on('connection', (socket) => {
     g.nextHandTimer = setTimeout(() => {
       g.nextHandTimer = null; 
       const active = g.getActivePlayers().filter(p => p.chips > 0 || (p.chips === 0 && p.isActive));
-      if (active.length >= 2 && g.phase === 'waiting') {
+      
+      // FIX: Ensure the loop continues natively from the 'showdown' phase
+      if (active.length >= 2 && (g.phase === 'waiting' || g.phase === 'showdown')) {
         const r = g.startHand();
         if (!r.error) {
           io.to(gameId).emit('hand_started', { dealerSeat: r.dealerSeat });
@@ -251,7 +251,6 @@ io.on('connection', (socket) => {
     }
   });
 
-  // NEW: Updated Chat Endpoint injecting the raw socket.id
   socket.on('chat', ({ msg }) => {
     const game = getGame();
     if (!game) return;
