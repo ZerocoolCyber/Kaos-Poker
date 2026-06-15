@@ -103,13 +103,18 @@ io.on('connection', (socket) => {
       g.nextHandTimer = null; 
       const active = g.getActivePlayers().filter(p => p.chips > 0 || (p.chips === 0 && p.isActive));
       
-      // FIX: Ensure the loop continues natively from the 'showdown' phase
       if (active.length >= 2 && (g.phase === 'waiting' || g.phase === 'showdown')) {
         const r = g.startHand();
         if (!r.error) {
           io.to(gameId).emit('hand_started', { dealerSeat: r.dealerSeat });
           broadcastState(gameId);
         }
+      } else if (g.phase === 'showdown') {
+        // UN-GRIDLOCK THE ENGINE: If the 8 second reveal finishes but players haven't rebought
+        // yet, unfreeze the table and put the game into standard 'waiting' mode!
+        g.phase = 'waiting';
+        g.isContested = false; 
+        broadcastState(gameId);
       }
     }, delay); 
   }
@@ -225,7 +230,8 @@ io.on('connection', (socket) => {
     player.isActive = true;
     io.to(currentGameId).emit('chat', { system: true, msg: `${player.name} manually rebought for ${game.rebuyAmount} chips` });
     
-    if (game.phase === 'waiting') {
+    // FIX: Allow rebuy logic to evaluate even if we are currently looking at the showdown reveal!
+    if (game.phase === 'waiting' || game.phase === 'showdown') {
        startNextHandTimeout(currentGameId, 3000, false);
     }
     broadcastState(currentGameId);
@@ -237,7 +243,8 @@ io.on('connection', (socket) => {
     const player = game.players[socket.id];
     if (player) {
       player.autoRebuy = !!val;
-      if (player.autoRebuy && player.chips === 0 && !player.isBusted && game.phase === 'waiting') {
+      // FIX: Check for phase === 'showdown' here as well
+      if (player.autoRebuy && player.chips === 0 && !player.isBusted && (game.phase === 'waiting' || game.phase === 'showdown')) {
         const canRebuy = game.allowRebuy && (game.maxRebuys === -1 || player.rebuyCount < game.maxRebuys);
         if (canRebuy) {
           player.chips = game.rebuyAmount;
