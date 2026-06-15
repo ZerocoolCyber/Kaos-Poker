@@ -50,8 +50,12 @@ body {
   background: radial-gradient(ellipse at center, #0a192f 0%, #020617 80%); overflow: hidden;
 }
 
+/* FLUID VIEWPORT TABLE SCALING */
 .poker-table {
-  position: relative; width: min(95vw, 1200px); aspect-ratio: 1.5; 
+  position: relative; 
+  width: 95vw; 
+  max-width: 120vh; /* Keeps height proportional to screen size without clipping bottom */
+  aspect-ratio: 1.5; 
   background: url('/images/PokerTable.png') center/100% 100% no-repeat; border: none;
 }
 .table-glow {
@@ -90,7 +94,6 @@ body {
 
 .card-wrapper { transition: transform 0.2s; filter: drop-shadow(0 6px 8px rgba(0,0,0,0.6)); display: flex; flex-shrink: 0; }
 .community-cards .card-wrapper { width: 85px; height: 118px; }
-.seat-cards .card-wrapper { width: 45px; height: 62px; }
 .my-hand-cards .card-wrapper { width: 120px; height: 165px; } 
 .showdown-cards { display: flex; justify-content: flex-start; gap: 8px; margin-top: 1rem; }
 .showdown-cards .card-wrapper { width: 55px; height: 77px; }
@@ -123,6 +126,23 @@ body {
 .action-tag.allin { background: var(--neon-magenta); color: #fff; border: 1px solid #fff; box-shadow: 0 0 15px var(--neon-magenta); animation: pulse-allin 0.8s infinite alternate; }
 @keyframes pulse-allin { 0% { box-shadow: 0 0 5px var(--neon-magenta); transform: scale(1); } 100% { box-shadow: 0 0 20px var(--neon-magenta); transform: scale(1.1); } }
 
+/* OVERHAULED TABLE HOLE CARDS */
+.seat-cards { 
+  display: flex; gap: -35px; /* Tight overlap */
+  position: absolute; 
+  top: -10px; right: 65px; /* Pushed to the left to avoid Action Tags */
+  z-index: 21; 
+}
+.seat-cards .card-wrapper { 
+  width: 60px; height: 84px; /* 40% Larger */
+  transition: transform 0.2s;
+}
+/* Left Card Fan Effect */
+.seat-cards .card-wrapper:nth-child(1) { transform: rotate(-10deg) translateY(5px); }
+/* Right Card Fan Effect */
+.seat-cards .card-wrapper:nth-child(2) { transform: rotate(5deg) translateY(-2px); box-shadow: -4px 0 10px rgba(0,0,0,0.4); }
+
+
 .seat.occupied .seat-avatar { color: #fff; border-color: rgba(0,243,255,0.6); }
 .seat.is-me .seat-avatar { border-color: var(--neon-cyan); box-shadow: 0 0 20px rgba(0,243,255,0.4); }
 .seat.active-player .seat-avatar { border-color: var(--neon-magenta); box-shadow: 0 0 25px rgba(255,0,60,0.5); }
@@ -137,7 +157,6 @@ body {
 .seat-name { font-size: 0.95rem; font-weight: 700; color: #cbd5e1; background: rgba(2,6,23,0.8); padding: 4px 10px; border-radius: 4px; border: 1px solid var(--border); margin-top: 6px; }
 .seat-chips { font-family: 'Orbitron', sans-serif; font-size: 0.8rem; color: var(--neon-cyan); margin-top: 4px; }
 .seat-bet { font-family: 'Orbitron', sans-serif; font-size: 0.75rem; color: #fff; min-height: 16px; margin-top: 4px; }
-.seat-cards { display: flex; gap: -20px; position: absolute; top: -30px; left: 45px; z-index: 21; }
 
 /* ── SIDEBAR ── */
 .sidebar { width: 320px; display: flex; flex-direction: column; background: #020617; border-left: 1px solid var(--border); z-index: 20; }
@@ -186,14 +205,16 @@ body {
   .seat-name { font-size: 0.75rem; padding: 2px 6px; margin-top: 4px; }
   .seat-chips { font-size: 0.65rem; margin-top: 2px; }
   .seat-bet { font-size: 0.65rem; min-height: 12px; margin-top: 2px; }
-  .seat-cards .card-wrapper { width: 30px; height: 42px; }
-  .seat-cards { top: -20px; left: 30px; gap: -15px; }
   .community-cards .card-wrapper { width: 45px; height: 63px; }
   .pot-amount { font-size: 1.2rem; }
   .my-hand-cards .card-wrapper { width: 80px; height: 110px; }
   .busted-text { font-size: 0.65rem; padding: 2px 4px; top: 10px; }
   .waiting-text { font-size: 0.6rem; padding: 2px 4px; top: 10px; }
   .action-tag { font-size: 0.55rem; padding: 2px 4px; right: -10px; top: -5px; }
+
+  /* Mobile Hole Cards Fan Correction */
+  .seat-cards .card-wrapper { width: 38px; height: 53px; }
+  .seat-cards { top: -5px; right: 40px; gap: -20px; }
 }
 </style>
 </head>
@@ -431,7 +452,6 @@ function renderState(state) {
      document.getElementById('auto-rebuy-box').style.display = 'block'; document.getElementById('lbl-rebuy-amt').textContent = state.rebuyAmount; document.getElementById('lbl-rebuy-count').textContent = myPlayer.rebuyCount; document.getElementById('lbl-rebuy-max').innerHTML = state.maxRebuys === -1 ? '&infin;' : state.maxRebuys; document.getElementById('cb-auto-rebuy').checked = myPlayer.autoRebuy;
   } else { document.getElementById('auto-rebuy-box').style.display = 'none'; }
 
-  // FIX: Clear the sidebar cards out initially every time we render!
   document.getElementById('my-cards').innerHTML = '';
 
   let seatsHtml = '';
@@ -467,7 +487,6 @@ function renderState(state) {
     if (!player.folded && player.cardCount > 0 && !player.isBusted) {
       if (sId === mySocketId && player.holeCards.length === 2 && player.holeCards[0].rank !== '?') {
          cardsHtml = getSvgCard(player.holeCards[0].rank, player.holeCards[0].suit) + getSvgCard(player.holeCards[1].rank, player.holeCards[1].suit);
-         // FIX: Push a copy of the cards to the sidebar!
          document.getElementById('my-cards').innerHTML = cardsHtml;
       } else { cardsHtml = getSvgCard('?', '?', true) + getSvgCard('?', '?', true); }
     }
