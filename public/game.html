@@ -318,7 +318,6 @@ const gameId = params.get('id');
 const myName = sessionStorage.getItem('playerName') || 'Guest';
 const myAvatarId = parseInt(sessionStorage.getItem('avatarId')) || 0; 
 
-// Generate or retrieve the persistent local token to survive 5G network drops
 let myToken = localStorage.getItem('kaos_token');
 if (!myToken) {
     myToken = Math.random().toString(36).substring(2, 15);
@@ -419,8 +418,9 @@ socket.on('chat', (data) => {
   }
 });
 
-function getSvgCard(rank, suit, faceDown=false, isHighlight=false, isDim=false) {
-  if (faceDown) return `<div class="card-wrapper face-down cyber-rez"><img src="/images/card-back.png" alt="Back" style="width:100%; height:100%; border-radius:4px; object-fit:cover; border: 1px solid #334155; background-color: #0f172a;" onerror="this.onerror=null; this.src='/images/logo.png';"/></div>`;
+// PASSES DYNAMIC DECK IMAGE
+function getSvgCard(rank, suit, faceDown=false, isHighlight=false, isDim=false, cardBack='card-back.png') {
+  if (faceDown) return `<div class="card-wrapper face-down cyber-rez"><img src="/images/${cardBack}" alt="Back" style="width:100%; height:100%; border-radius:4px; object-fit:cover; border: 1px solid #334155; background-color: #0f172a;" onerror="this.onerror=null; this.src='/images/logo.png';"/></div>`;
   const isRed = (suit === 'h' || suit === 'd'); const textColor = isRed ? '#dc2626' : '#0f172a'; const bgColor = '#f8fafc'; const borderColor = '#cbd5e1';
   const symbols = { s: '♠', h: '♥', d: '♦', c: '♣' }; const s = symbols[suit]; const displayRank = rank === 'T' ? '10' : rank;
   
@@ -438,7 +438,6 @@ function renderState(state) {
   document.getElementById('pot-amount').textContent = state.pot;
   document.getElementById('phase-label').textContent = state.phase !== 'waiting' ? `PHASE: ${state.phase}` : '';
 
-  // SECURE HOST MIGRATION: Server tells us if we are the host based on our token
   const isHost = (state.hostToken === myToken);
 
   if (isHost) {
@@ -509,13 +508,13 @@ function renderState(state) {
          const h2 = isShowdownReveal && winningCards.includes(c2Key);
          const d2 = isShowdownReveal && !winningCards.includes(c2Key);
          
-         cardsHtml = getSvgCard(c1.rank, c1.suit, false, h1, d1) + getSvgCard(c2.rank, c2.suit, false, h2, d2);
+         cardsHtml = getSvgCard(c1.rank, c1.suit, false, h1, d1, state.cardBack) + getSvgCard(c2.rank, c2.suit, false, h2, d2, state.cardBack);
          
          if (sId === myToken) {
-             document.getElementById('my-cards').innerHTML = getSvgCard(c1.rank, c1.suit) + getSvgCard(c2.rank, c2.suit);
+             document.getElementById('my-cards').innerHTML = getSvgCard(c1.rank, c1.suit, false, false, false, state.cardBack) + getSvgCard(c2.rank, c2.suit, false, false, false, state.cardBack);
          }
       } else { 
-         cardsHtml = getSvgCard('?', '?', true) + getSvgCard('?', '?', true); 
+         cardsHtml = getSvgCard('?', '?', true, false, false, state.cardBack) + getSvgCard('?', '?', true, false, false, state.cardBack); 
       }
     }
 
@@ -538,9 +537,9 @@ function renderState(state) {
        const cardKey = c.rank + c.suit;
        const h = isShowdownReveal && winningCards.includes(cardKey);
        const d = isShowdownReveal && !winningCards.includes(cardKey);
-       commHtml += getSvgCard(c.rank, c.suit, false, h, d);
+       commHtml += getSvgCard(c.rank, c.suit, false, h, d, state.cardBack);
     } else {
-       commHtml += getSvgCard('?','?', true);
+       commHtml += getSvgCard('?','?', true, false, false, state.cardBack);
     }
   }
   document.getElementById('community-cards').innerHTML = commHtml;

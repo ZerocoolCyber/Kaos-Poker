@@ -15,7 +15,6 @@
   .profile-section { padding: 1rem; border: 1px solid rgba(255,0,60,0.3); background: rgba(255,0,60,0.05); border-radius: 4px; }
   .avatar-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.5rem; margin-top: 0.8rem; }
   
-  /* ── FIX: ALIGNED AVATAR LOGIC WITH GAME BOARD ── */
   .avatar-option { 
     width: 100%; aspect-ratio: 1; border-radius: 50%; cursor: pointer; 
     border: 2px solid transparent; transition: 0.2s; 
@@ -34,6 +33,11 @@
   }
   .avatar-option:hover { border-color: rgba(0,243,255,0.5); }
   .avatar-option.selected { border-color: var(--neon-cyan); box-shadow: 0 0 15px rgba(0,243,255,0.6); }
+
+  /* DECK DESIGN GRID */
+  .card-back-grid { display: flex; gap: 10px; justify-content: center; margin-top: 0.5rem; }
+  .cb-option { width: 45px; height: 63px; border: 2px solid transparent; border-radius: 4px; cursor: pointer; object-fit: cover; transition: 0.2s; }
+  .cb-option.selected { border-color: var(--neon-magenta); box-shadow: 0 0 15px rgba(255,0,60,0.5); transform: scale(1.1); }
 
   .tabs { display: flex; border: 1px solid var(--border); border-radius: 4px; overflow: hidden; }
   .tab { flex: 1; padding: 0.8rem; background: transparent; color: var(--dim); border: none; cursor: pointer; font-family: 'Orbitron', sans-serif; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.1em; transition: 0.2s; }
@@ -85,9 +89,7 @@
       </div>
       <div class="form-group">
         <label>Max Players</label>
-        <select id="max-players">
-          <option value="6">6</option><option value="8" selected>8</option>
-        </select>
+        <input type="number" id="max-players" value="10" min="2" max="10" />
       </div>
     </div>
     
@@ -124,6 +126,16 @@
         </div>
     </div>
 
+    <div class="form-group" style="margin-top: 0.5rem;">
+      <label style="color: var(--neon-magenta); text-align: center;">DECK DESIGN OVERRIDE</label>
+      <div class="card-back-grid">
+        <img src="/images/card-back.png" class="cb-option selected" onclick="selectCardBack(this, 'card-back.png')" alt="Classic">
+        <img src="/images/AltLady.png" class="cb-option" onclick="selectCardBack(this, 'AltLady.png')" alt="AltLady">
+        <img src="/images/Dragon.png" class="cb-option" onclick="selectCardBack(this, 'Dragon.png')" alt="Dragon">
+        <img src="/images/Football.png" class="cb-option" onclick="selectCardBack(this, 'Football.png')" alt="Football">
+      </div>
+    </div>
+
     <div class="error" id="create-error"></div>
     <button class="btn" onclick="createGame()">Launch Server</button>
   </div>
@@ -140,6 +152,7 @@
 
 <script>
   let selectedAvatarId = 0;
+  let selectedCardBack = 'card-back.png';
 
   const grid = document.getElementById('avatar-grid');
   for(let i = 0; i < 15; i++) {
@@ -158,6 +171,12 @@
       selectedAvatarId = i;
     };
     grid.appendChild(div);
+  }
+
+  function selectCardBack(el, fileName) {
+    document.querySelectorAll('.cb-option').forEach(img => img.classList.remove('selected'));
+    el.classList.add('selected');
+    selectedCardBack = fileName;
   }
 
   function switchTab(tab) {
@@ -195,12 +214,13 @@
     const config = {
       gameType: document.getElementById('game-type').value,
       startingChips: parseInt(document.getElementById('starting-chips').value)||1000,
-      maxPlayers: parseInt(document.getElementById('max-players').value)||8,
+      maxPlayers: parseInt(document.getElementById('max-players').value)||10,
       smallBlind: parseInt(document.getElementById('small-blind').value)||10,
       bigBlind: parseInt(document.getElementById('big-blind').value)||20,
       maxRebuys: parseInt(document.getElementById('max-rebuys').value),
       rebuyAmount: parseInt(document.getElementById('rebuy-amount').value)||1000,
-      blindDuration: parseInt(document.getElementById('blind-duration').value)||15
+      blindDuration: parseInt(document.getElementById('blind-duration').value)||15,
+      cardBack: selectedCardBack
     };
 
     try {

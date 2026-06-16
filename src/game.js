@@ -102,6 +102,9 @@ class PokerGame {
     this.currentBlindLevel = 0;
     this.blindTimer = null;
     
+    // CUSTOM CARD BACK OVERRIDE
+    this.cardBack = config.cardBack || 'card-back.png';
+    
     this.blindLevels = [
       { sb: this.initialSmallBlind, bb: this.initialBigBlind },
       { sb: this.initialSmallBlind * 2, bb: this.initialBigBlind * 2 },
@@ -121,8 +124,8 @@ class PokerGame {
 
     this.phase = 'waiting'; 
     this.isContested = false;
-    this.hostToken = null; // NEW: Official Host Tracker
-    this.destroyTimer = null; // NEW: Ghost Room TTL
+    this.hostToken = null; 
+    this.destroyTimer = null; 
 
     this.deck = [];
     this.communityCards = [];
@@ -139,7 +142,6 @@ class PokerGame {
     const seat = this.seats.indexOf(null);
     if (seat === -1) return { error: 'Game is full' };
     
-    // Check if name is taken by a DIFFERENT token
     const existingName = Object.values(this.players).find(p => p.name === name);
     if (existingName && existingName.id !== token) return { error: 'Name taken by another player' };
 
@@ -166,8 +168,6 @@ class PokerGame {
     return { ok: true };
   }
 
-  // With persistent sessions, we usually just flag isDisconnected=true.
-  // We only hard-remove if forced.
   removePlayer(token) {
     const player = this.players[token];
     if (!player) { delete this.spectators[token]; return; }
@@ -536,7 +536,7 @@ class PokerGame {
         id: p.id, name: p.name, avatarId: p.avatarId, seat: p.seat, chips: p.chips, bet: p.bet,
         folded: p.folded, allIn: p.allIn, isActive: p.isActive, hasActed: p.hasActed, cardCount: p.holeCards.length,
         rebuyCount: p.rebuyCount, autoRebuy: p.autoRebuy, isBusted: p.isBusted, 
-        lastAction: p.lastAction, isDisconnected: p.isDisconnected, // Passes disconnect flag to UI
+        lastAction: p.lastAction, isDisconnected: p.isDisconnected, 
         holeCards: (id === forToken || revealCards) ? p.holeCards : (p.holeCards.length > 0 ? [{ rank: '?', suit: '?' }, { rank: '?', suit: '?' }] : []),
       };
     }
@@ -545,6 +545,7 @@ class PokerGame {
       players, spectators: this.spectators, seats: this.seats, maxPlayers: this.maxPlayers,
       communityCards: this.communityCards, pot: this.pot, currentBet: this.currentBet,
       dealerSeat: this.dealerSeat, actionSeat: this.actionSeat, hostToken: this.hostToken,
+      cardBack: this.cardBack, // ADDED: Broadcasts the custom deck to all browsers
       smallBlind: this.smallBlind, bigBlind: this.bigBlind, handCount: this.handCount,
       allowRebuy: this.allowRebuy, maxRebuys: this.maxRebuys, rebuyAmount: this.rebuyAmount, blindLevel: this.currentBlindLevel,
     };
