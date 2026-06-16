@@ -19,10 +19,11 @@
 
 * { margin: 0; padding: 0; box-sizing: border-box; touch-action: manipulation; }
 
+/* FIXED: Mobile Chrome Viewport Bug (added 100dvh) */
 body {
   background: #020617; color: #e2e8f0;
   font-family: 'Rajdhani', sans-serif;
-  height: 100vh; overflow: hidden;
+  height: 100vh; height: 100dvh; overflow: hidden;
   display: flex; flex-direction: column;
 }
 
@@ -137,11 +138,7 @@ body {
 .action-tag.allin { background: var(--neon-magenta); color: #fff; border: 1px solid #fff; box-shadow: 0 0 15px var(--neon-magenta); animation: pulse-allin 0.8s infinite alternate; }
 @keyframes pulse-allin { 0% { box-shadow: 0 0 5px var(--neon-magenta); transform: scale(1); } 100% { box-shadow: 0 0 20px var(--neon-magenta); transform: scale(1.1); } }
 
-.seat-cards { 
-  display: flex; gap: -35px; 
-  position: absolute; top: -10px; right: 65px; 
-  z-index: 21; 
-}
+.seat-cards { display: flex; gap: -35px; position: absolute; top: -10px; right: 65px; z-index: 21; }
 .seat-cards .card-wrapper { width: 60px; height: 84px; transition: transform 0.2s; }
 .seat-cards .card-wrapper:nth-child(1) { transform: rotate(-10deg) translateY(5px); }
 .seat-cards .card-wrapper:nth-child(2) { transform: rotate(5deg) translateY(-2px); box-shadow: -4px 0 10px rgba(0,0,0,0.4); }
@@ -191,10 +188,16 @@ body {
   .game-info { gap: 1rem; }
   .game-info-value { font-size: 0.9rem; }
   .game-code { font-size: 0.9rem; }
+  
   .game-layout { flex-direction: column; }
-  .table-area { flex: none; height: 50vh; }
-  .poker-table { width: 98vw; aspect-ratio: 1.5; }
-  .sidebar { width: 100%; height: 50vh; border-left: none; border-top: 1px solid var(--border); overflow-y: auto; display: grid; grid-template-columns: 1fr; }
+  /* FIXED: Adjusted height to dvh and used pure flexbox for the sidebar */
+  .table-area { flex: none; height: 45dvh; min-height: 250px; }
+  .sidebar { 
+     width: 100%; flex: 1; height: auto; border-left: none; 
+     border-top: 1px solid var(--border); overflow-y: auto; 
+     display: flex; flex-direction: column; 
+  }
+  
   .my-hand-panel { padding: 1rem; border-bottom: 1px solid var(--border); }
   .my-hand-cards { min-height: 110px; }
   .action-panel { padding: 1rem; }
@@ -328,7 +331,7 @@ let socket = io();
 let mySocketId = null;
 let gameState = null;
 let prevCommCardsCount = 0;
-let winningCards = []; // Tracks exact cards during a showdown reveal
+let winningCards = []; 
 
 const visualSeats = [
   { left: '50%', top: '95%' }, { left: '75%', top: '95%' }, { left: '95%', top: '50%' }, { left: '75%', top: '5%' },
@@ -364,7 +367,6 @@ socket.on('clock_clear', () => {
   if (isHost && document.getElementById('host-btn')) document.getElementById('host-btn').disabled = false;
 });
 
-// OVERHAULED SHOWDOWN LOGIC
 socket.on('showdown', (result) => {
   playSfx('win'); 
   winningCards = [];
@@ -419,7 +421,6 @@ socket.on('chat', (data) => {
   }
 });
 
-// HIGHLIGHT/DIM CSS INJECTION
 function getSvgCard(rank, suit, faceDown=false, isHighlight=false, isDim=false) {
   if (faceDown) return `<div class="card-wrapper face-down cyber-rez"><img src="/images/card-back.png" alt="Back" style="width:100%; height:100%; border-radius:4px; object-fit:cover; border: 1px solid #334155; background-color: #0f172a;" onerror="this.onerror=null; this.src='/images/logo.png';"/></div>`;
   const isRed = (suit === 'h' || suit === 'd'); const textColor = isRed ? '#dc2626' : '#0f172a'; const bgColor = '#f8fafc'; const borderColor = '#cbd5e1';
@@ -493,7 +494,6 @@ function renderState(state) {
     } else if (!player.isActive && state.phase !== 'waiting' && state.phase !== 'game_over') { avatarHtml += `<div class="waiting-text">WAITING</div>`; }
     avatarHtml += `</div>`;
 
-    // UNENCRYPTED CARD RENDER LOGIC
     let cardsHtml = '';
     if (!player.folded && player.cardCount > 0 && !player.isBusted) {
       if (player.holeCards.length === 2 && player.holeCards[0].rank !== '?') {
@@ -508,7 +508,7 @@ function renderState(state) {
          cardsHtml = getSvgCard(c1.rank, c1.suit, false, h1, d1) + getSvgCard(c2.rank, c2.suit, false, h2, d2);
          
          if (sId === mySocketId) {
-             document.getElementById('my-cards').innerHTML = cardsHtml;
+             document.getElementById('my-cards').innerHTML = getSvgCard(c1.rank, c1.suit) + getSvgCard(c2.rank, c2.suit);
          }
       } else { 
          cardsHtml = getSvgCard('?', '?', true) + getSvgCard('?', '?', true); 

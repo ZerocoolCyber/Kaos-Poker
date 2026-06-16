@@ -59,11 +59,22 @@ io.on('connection', (socket) => {
     clearClock(game, gameId); 
 
     if (result.phase === 'showdown' || result.phase === 'game_over') {
+      
+      // NEW: INJECT HAND HISTORY LOG INTO CHAT
+      if (result.results) {
+         result.results.forEach(pot => {
+            const winners = pot.players.map(p => p.name).join(' & ');
+            const handType = pot.handName ? `- ${pot.handName}` : '- Uncontested';
+            io.to(gameId).emit('chat', { system: true, msg: `📜 HISTORY: ${winners} won Hand #${game.handCount} ${handType} (${pot.pot} Chips)` });
+         });
+      }
+
       if (result.results && result.results.systemChat) {
         result.results.systemChat.forEach(msg => {
           io.to(gameId).emit('chat', { system: true, msg });
         });
       }
+      
       io.to(gameId).emit('showdown', result);
       broadcastState(gameId);
       
@@ -110,8 +121,6 @@ io.on('connection', (socket) => {
           broadcastState(gameId);
         }
       } else if (g.phase === 'showdown') {
-        // UN-GRIDLOCK THE ENGINE: If the 8 second reveal finishes but players haven't rebought
-        // yet, unfreeze the table and put the game into standard 'waiting' mode!
         g.phase = 'waiting';
         g.isContested = false; 
         broadcastState(gameId);
@@ -230,7 +239,6 @@ io.on('connection', (socket) => {
     player.isActive = true;
     io.to(currentGameId).emit('chat', { system: true, msg: `${player.name} manually rebought for ${game.rebuyAmount} chips` });
     
-    // FIX: Allow rebuy logic to evaluate even if we are currently looking at the showdown reveal!
     if (game.phase === 'waiting' || game.phase === 'showdown') {
        startNextHandTimeout(currentGameId, 3000, false);
     }
@@ -243,7 +251,6 @@ io.on('connection', (socket) => {
     const player = game.players[socket.id];
     if (player) {
       player.autoRebuy = !!val;
-      // FIX: Check for phase === 'showdown' here as well
       if (player.autoRebuy && player.chips === 0 && !player.isBusted && (game.phase === 'waiting' || game.phase === 'showdown')) {
         const canRebuy = game.allowRebuy && (game.maxRebuys === -1 || player.rebuyCount < game.maxRebuys);
         if (canRebuy) {
