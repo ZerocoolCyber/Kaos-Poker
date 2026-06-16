@@ -120,7 +120,9 @@ class PokerGame {
     this.chat = [];
 
     this.phase = 'waiting'; 
-    this.isContested = false; // Tracks if cards should be revealed
+    this.isContested = false;
+    this.hostToken = null; // NEW: Official Host Tracker
+    this.destroyTimer = null; // NEW: Ghost Room TTL
 
     this.deck = [];
     this.communityCards = [];
@@ -133,36 +135,44 @@ class PokerGame {
     this.lastRaiseAmount = 0;
   }
 
-  addPlayer(socketId, name, avatarId = 0) {
+  addPlayer(token, name, avatarId = 0) {
     const seat = this.seats.indexOf(null);
     if (seat === -1) return { error: 'Game is full' };
-    if (Object.values(this.players).find(p => p.name === name)) return { error: 'Name taken' };
+    
+    // Check if name is taken by a DIFFERENT token
+    const existingName = Object.values(this.players).find(p => p.name === name);
+    if (existingName && existingName.id !== token) return { error: 'Name taken by another player' };
 
     const isMidHand = this.phase !== 'waiting' && this.phase !== 'game_over';
 
-    this.players[socketId] = {
-      id: socketId, name, avatarId, seat,
+    if (!this.hostToken) this.hostToken = token;
+
+    this.players[token] = {
+      id: token, name, avatarId, seat,
       chips: this.startingChips, holeCards: [],
       bet: 0, totalBetThisHand: 0,
       folded: false, allIn: false, 
       isActive: !isMidHand,
       hasActed: false, lastAction: null,
-      rebuyCount: 0, autoRebuy: false, isBusted: false
+      rebuyCount: 0, autoRebuy: false, 
+      isBusted: false, isDisconnected: false
     };
-    this.seats[seat] = socketId;
+    this.seats[seat] = token;
     return { seat };
   }
 
-  addSpectator(socketId, name) {
-    this.spectators[socketId] = { id: socketId, name };
+  addSpectator(token, name) {
+    this.spectators[token] = { id: token, name };
     return { ok: true };
   }
 
-  removePlayer(socketId) {
-    const player = this.players[socketId];
-    if (!player) { delete this.spectators[socketId]; return; }
+  // With persistent sessions, we usually just flag isDisconnected=true.
+  // We only hard-remove if forced.
+  removePlayer(token) {
+    const player = this.players[token];
+    if (!player) { delete this.spectators[token]; return; }
     this.seats[player.seat] = null;
-    delete this.players[socketId];
+    delete this.players[token];
   }
 
   getActivePlayers() {
@@ -177,7 +187,6 @@ class PokerGame {
 
   canStartGame() {
     const readyPlayers = this.getActivePlayers().filter(p => p.chips > 0 || (p.chips === 0 && p.isActive));
-    // FIX: Allows the host to force-start a hand even during the 8-second showdown delay
     return readyPlayers.length >= 2 && (this.phase === 'waiting' || this.phase === 'game_over' || this.phase === 'showdown');
   }
 
@@ -186,7 +195,6 @@ class PokerGame {
     this.handCount = 0;
     this.communityCards = [];
     this.pot = 0;
-    
     this.currentBlindLevel = 0;
     this.smallBlind = this.initialSmallBlind;
     this.bigBlind = this.initialBigBlind;
@@ -270,8 +278,8 @@ class PokerGame {
     if (player.chips === 0) player.allIn = true;
   }
 
-  playerAction(socketId, action, amount) {
-    const player = this.players[socketId];
+  playerAction(token, action, amount) {
+    const player = this.players[token];
     if (!player) return { error: 'Player not found' };
     if (player.seat !== this.actionSeat) return { error: 'Not your turn' };
     if (player.folded || player.allIn || !player.isActive) return { error: 'Cannot act' };
@@ -308,7 +316,7 @@ class PokerGame {
         player.lastAction = 'RAISE';
         if (player.chips === 0) { player.allIn = true; player.lastAction = 'ALL-IN'; }
         player.hasActed = true;
-        this.getActivePlayersInHand().forEach(p => { if (p.id !== socketId && !p.allIn) p.hasActed = false; });
+        this.getActivePlayersInHand().forEach(p => { if (p.id !== token && !p.allIn) p.hasActed = false; });
         break;
       }
       case 'allin': {
@@ -316,7 +324,7 @@ class PokerGame {
         if (player.bet + allInAmt > this.currentBet) {
           this.lastRaiseAmount = Math.max(player.bet + allInAmt - this.currentBet, this.lastRaiseAmount);
           this.currentBet = player.bet + allInAmt;
-          this.getActivePlayersInHand().forEach(p => { if (p.id !== socketId && !p.allIn) p.hasActed = false; });
+          this.getActivePlayersInHand().forEach(p => { if (p.id !== token && !p.allIn) p.hasActed = false; });
         }
         this.pot += allInAmt; player.bet += allInAmt;
         player.totalBetThisHand += allInAmt; player.chips = 0;
@@ -411,7 +419,6 @@ class PokerGame {
         baseResult.phase = 'game_over';
         baseResult.tournamentWinner = survivors[0];
     } else {
-        // FIX: Freeze the state on showdown so cards stay decrypted during the 8-second delay!
         this.phase = 'showdown'; 
     }
     return baseResult;
@@ -419,7 +426,7 @@ class PokerGame {
 
   showdown() {
     this.phase = 'showdown';
-    this.isContested = true; // Tell the server it is safe to unencrypt the cards
+    this.isContested = true; 
     const inHand = this.getActivePlayersInHand();
     const results = this.calculateWinners(inHand);
     
@@ -447,7 +454,7 @@ class PokerGame {
 
   endHand() {
     this.phase = 'showdown';
-    this.isContested = false; // Hand was uncontested (everyone else folded). Keep cards hidden!
+    this.isContested = false;
 
     const winner = this.getActivePlayersInHand()[0];
     winner.chips += this.pot;
@@ -520,8 +527,7 @@ class PokerGame {
     return pots;
   }
 
-  getRoomState(forSocketId) {
-    // FIX: Unencrypt the hole cards officially on the server if it's a contested showdown!
+  getRoomState(forToken) {
     const revealCards = this.phase === 'game_over' || (this.phase === 'showdown' && this.isContested);
 
     const players = {};
@@ -529,15 +535,16 @@ class PokerGame {
       players[id] = {
         id: p.id, name: p.name, avatarId: p.avatarId, seat: p.seat, chips: p.chips, bet: p.bet,
         folded: p.folded, allIn: p.allIn, isActive: p.isActive, hasActed: p.hasActed, cardCount: p.holeCards.length,
-        rebuyCount: p.rebuyCount, autoRebuy: p.autoRebuy, isBusted: p.isBusted, lastAction: p.lastAction,
-        holeCards: (id === forSocketId || revealCards) ? p.holeCards : (p.holeCards.length > 0 ? [{ rank: '?', suit: '?' }, { rank: '?', suit: '?' }] : []),
+        rebuyCount: p.rebuyCount, autoRebuy: p.autoRebuy, isBusted: p.isBusted, 
+        lastAction: p.lastAction, isDisconnected: p.isDisconnected, // Passes disconnect flag to UI
+        holeCards: (id === forToken || revealCards) ? p.holeCards : (p.holeCards.length > 0 ? [{ rank: '?', suit: '?' }, { rank: '?', suit: '?' }] : []),
       };
     }
     return {
       gameId: this.id, mode: this.mode, gameType: this.gameType, phase: this.phase,
       players, spectators: this.spectators, seats: this.seats, maxPlayers: this.maxPlayers,
       communityCards: this.communityCards, pot: this.pot, currentBet: this.currentBet,
-      dealerSeat: this.dealerSeat, actionSeat: this.actionSeat,
+      dealerSeat: this.dealerSeat, actionSeat: this.actionSeat, hostToken: this.hostToken,
       smallBlind: this.smallBlind, bigBlind: this.bigBlind, handCount: this.handCount,
       allowRebuy: this.allowRebuy, maxRebuys: this.maxRebuys, rebuyAmount: this.rebuyAmount, blindLevel: this.currentBlindLevel,
     };

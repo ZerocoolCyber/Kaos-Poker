@@ -160,8 +160,14 @@ body { background: var(--bg); color: #fff; font-family: 'Rajdhani', sans-serif; 
 <div class="marquee"><div class="marquee-content" id="tv-marquee">AWAITING HAND SEQUENCE...</div></div>
 
 <script>
+let tvToken = localStorage.getItem('kaos_tv_token');
+if (!tvToken) { 
+    tvToken = 'TV_' + Math.random().toString(36).substring(2); 
+    localStorage.setItem('kaos_tv_token', tvToken); 
+}
+
 let socket = io();
-let winningCards = []; // Tracks exactly which cards are glowing
+let winningCards = []; 
 
 function getSvgCard(rank, suit, faceDown=false, isHighlight=false, isDim=false) {
   if (faceDown) return `<div class="card-wrapper face-down cyber-rez"><img src="/images/card-back.png" alt="Back" style="width:100%; height:100%; border-radius:4px; object-fit:cover; border: 1px solid #334155; background-color: #0f172a;" onerror="this.onerror=null; this.src='/images/logo.png';"/></div>`;
@@ -179,7 +185,7 @@ function connectTV() {
   const code = document.getElementById('tv-code').value.trim().toUpperCase();
   if (code.length === 6) {
     document.getElementById('setup-screen').style.display = 'none';
-    socket.emit('join_game', { gameId: code, name: 'WALLBOARD', asSpectator: true });
+    socket.emit('join_game', { gameId: code, name: 'WALLBOARD', asSpectator: true, token: tvToken });
     document.getElementById('tv-code-display').textContent = code;
   }
 }
@@ -204,8 +210,14 @@ socket.on('game_state', (state) => {
     const spriteX = (aId % 5) * 25; const spriteY = Math.floor(aId / 5) * 50;
     
     let cls = 'lb-row'; let tag = '';
-    if (p.isBusted) { cls += ' busted'; tag = '<span style="color:var(--neon-magenta); font-size:1rem; margin-left:1rem;">(ELIMINATED)</span>';
-    } else if (!p.isActive && state.phase !== 'waiting' && state.phase !== 'game_over') { cls += ' waiting'; tag = '<span style="color:var(--neon-cyan); font-size:1rem; margin-left:1rem;">(WAITING)</span>'; }
+    
+    if (p.isDisconnected) { 
+       cls += ' busted'; tag = '<span style="color:#cbd5e1; font-size:1rem; margin-left:1rem;">(OFFLINE)</span>';
+    } else if (p.isBusted) { 
+       cls += ' busted'; tag = '<span style="color:var(--neon-magenta); font-size:1rem; margin-left:1rem;">(ELIMINATED)</span>';
+    } else if (!p.isActive && state.phase !== 'waiting' && state.phase !== 'game_over') { 
+       cls += ' waiting'; tag = '<span style="color:var(--neon-cyan); font-size:1rem; margin-left:1rem;">(WAITING)</span>'; 
+    }
     
     let actionBadge = '';
     if (p.lastAction) {
@@ -213,7 +225,6 @@ socket.on('game_state', (state) => {
        actionBadge = `<div class="action-tag ${actClass}">${p.lastAction}</div>`;
     }
 
-    // INJECT THE UNENCRYPTED CARDS ON TV DURING SHOWDOWN
     let holeCardsHtml = '';
     if (p.holeCards && p.holeCards.length === 2 && p.holeCards[0].rank !== '?') {
        const c1 = p.holeCards[0]; const c2 = p.holeCards[1];
@@ -256,8 +267,8 @@ socket.on('game_state', (state) => {
 });
 
 socket.on('chat', (data) => {
-  if (!data.system && data.socketId) {
-      const avatarEl = document.getElementById(`lb-avatar-${data.socketId}`);
+  if (!data.system && data.token) {
+      const avatarEl = document.getElementById(`lb-avatar-${data.token}`);
       if (avatarEl) {
           const bubble = document.createElement('div');
           bubble.className = 'floating-chat-tv';
@@ -273,13 +284,13 @@ socket.on('clock_tick', (data) => {
   document.getElementById('tv-clock-container').style.display = 'block';
   const pct = (data.seconds / 60) * 100;
   const bar = document.getElementById('tv-clock-bar'); bar.style.width = pct + '%';
+  
   if (data.seconds <= 5) { bar.style.background = 'var(--neon-magenta)'; bar.style.boxShadow = '0 0 15px var(--neon-magenta)';
   } else { bar.style.background = 'var(--neon-cyan)'; bar.style.boxShadow = 'none'; }
 });
 
 socket.on('clock_clear', () => { document.getElementById('tv-clock-container').style.display = 'none'; });
 
-// OVERHAULED TV SHOWDOWN REVEAL
 socket.on('showdown', (result) => {
   winningCards = [];
   let winnersText = result.results.map(pot => {

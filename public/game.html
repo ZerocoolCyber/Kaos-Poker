@@ -104,7 +104,6 @@ body {
 .community-cards .card-wrapper { width: 85px; height: 118px; }
 .my-hand-cards .card-wrapper { width: 120px; height: 165px; } 
 
-/* CARD REVEAL HIGHLIGHT CSS */
 .card-highlight { box-shadow: 0 0 20px var(--neon-magenta) !important; transform: translateY(-10px) !important; z-index: 30; border-radius: 4px; }
 .card-highlight svg rect { stroke: var(--neon-magenta) !important; stroke-width: 3px !important; }
 .card-dimmed { opacity: 0.3 !important; filter: grayscale(1) !important; }
@@ -151,17 +150,15 @@ body {
 
 .waiting-text { position: absolute; color: var(--neon-cyan); font-family: 'Orbitron'; font-weight: 900; font-size: 0.75rem; background: rgba(2,6,23,0.9); padding: 4px 8px; border: 1px solid var(--neon-cyan); border-radius: 4px; z-index: 20; transform: rotate(-10deg); top: 15px; box-shadow: 0 0 10px rgba(0,243,255,0.5); }
 .busted-text { position: absolute; color: var(--neon-magenta); font-family: 'Orbitron'; font-weight: 900; font-size: 0.85rem; background: rgba(2,6,23,0.9); padding: 4px 8px; border: 1px solid var(--neon-magenta); border-radius: 4px; z-index: 20; transform: rotate(-15deg); top: 15px; box-shadow: 0 0 10px rgba(255,0,60,0.5); }
+.offline-text { position: absolute; color: #cbd5e1; font-family: 'Orbitron'; font-weight: 900; font-size: 0.75rem; background: rgba(2,6,23,0.9); padding: 4px 8px; border: 1px solid #cbd5e1; border-radius: 4px; z-index: 20; transform: rotate(10deg); top: 15px; box-shadow: 0 0 10px rgba(0,0,0,0.8); }
 
 .seat-name, .seat-chips, .seat-bet { white-space: nowrap; line-height: 1.2; }
 .seat-name { font-size: 0.95rem; font-weight: 700; color: #cbd5e1; background: rgba(2,6,23,0.8); padding: 4px 10px; border-radius: 4px; border: 1px solid var(--border); margin-top: 6px; }
 .seat-chips { font-family: 'Orbitron', sans-serif; font-size: 0.8rem; color: var(--neon-cyan); margin-top: 4px; }
 .seat-bet { font-family: 'Orbitron', sans-serif; font-size: 0.75rem; color: #fff; min-height: 16px; margin-top: 4px; }
 
-/* ── SIDEBAR FIX: ALLOW OVERFLOW-Y AUTO ── */
-.sidebar { 
-  width: 320px; display: flex; flex-direction: column; background: #020617; 
-  border-left: 1px solid var(--border); z-index: 20; overflow-y: auto; 
-}
+/* ── SIDEBAR ── */
+.sidebar { width: 320px; display: flex; flex-direction: column; background: #020617; border-left: 1px solid var(--border); z-index: 20; overflow-y: auto; }
 .my-hand-panel { padding: 1.5rem; border-bottom: 1px solid var(--border); text-align: center; flex-shrink: 0; }
 .my-hand-cards { display: flex; justify-content: center; gap: 10px; margin: 1rem 0; min-height: 165px; }
 .auto-rebuy-box { margin-top: 1rem; border-top: 1px dashed var(--border); padding-top: 1rem; text-align: left; }
@@ -183,11 +180,6 @@ body {
 .chat-input { flex: 1; background: #0a192f; border: 1px solid var(--border); color: #fff; padding: 0.5rem; }
 .chat-send { background: var(--neon-cyan); border: none; color: #000; padding: 0 1rem; font-family: 'Orbitron'; font-weight: 700; cursor: pointer; }
 
-/* OVERLAYS */
-.overlay { position: fixed; inset: 0; background: rgba(2,6,23,0.9); z-index: 100; display: none; align-items: center; justify-content: center; }
-.overlay.show { display: flex; }
-.box { background: #0a192f; border: 1px solid var(--neon-cyan); padding: 2rem; text-align: center; box-shadow: 0 0 30px rgba(0,243,255,0.1); width: 90%; max-width: 500px; }
-
 /* ── MOBILE RESPONSIVE ── */
 @media (max-width: 850px) {
   .header { padding: 0.5rem; }
@@ -196,14 +188,8 @@ body {
   .game-info-value { font-size: 0.9rem; }
   .game-code { font-size: 0.9rem; }
   .game-layout { flex-direction: column; }
-  
   .table-area { flex: none; height: 45dvh; min-height: 250px; }
-  .sidebar { 
-     width: 100%; flex: 1; height: auto; border-left: none; 
-     border-top: 1px solid var(--border); overflow-y: auto; 
-     display: flex; flex-direction: column; 
-  }
-  
+  .sidebar { width: 100%; flex: 1; height: auto; border-left: none; border-top: 1px solid var(--border); overflow-y: auto; display: flex; flex-direction: column; }
   .my-hand-panel { padding: 1rem; border-bottom: 1px solid var(--border); }
   .my-hand-cards { min-height: 110px; }
   .action-panel { padding: 1rem; }
@@ -326,15 +312,20 @@ document.addEventListener('click', unlockAudio);
 
 function playSfx(name) { if (audioUnlocked && sfx[name]) { sfx[name].currentTime = 0; sfx[name].play().catch(()=>{}); } }
 
-// --- GAME LOGIC ---
+// --- GAME LOGIC & SESSION PERSISTENCE ---
 const params = new URLSearchParams(window.location.search);
 const gameId = params.get('id');
 const myName = sessionStorage.getItem('playerName') || 'Guest';
 const myAvatarId = parseInt(sessionStorage.getItem('avatarId')) || 0; 
-const isHost = sessionStorage.getItem('isHost') === 'true';
+
+// Generate or retrieve the persistent local token to survive 5G network drops
+let myToken = localStorage.getItem('kaos_token');
+if (!myToken) {
+    myToken = Math.random().toString(36).substring(2, 15);
+    localStorage.setItem('kaos_token', myToken);
+}
 
 let socket = io();
-let mySocketId = null;
 let gameState = null;
 let prevCommCardsCount = 0;
 let winningCards = []; 
@@ -344,7 +335,10 @@ const visualSeats = [
   { left: '50%', top: '5%' },  { left: '25%', top: '5%' },  { left: '5%',  top: '50%' }, { left: '25%', top: '95%' }
 ];
 
-socket.on('connect', () => { mySocketId = socket.id; socket.emit('join_game', { gameId, name: myName, avatarId: myAvatarId, asSpectator: false }); });
+socket.on('connect', () => { 
+    socket.emit('join_game', { gameId, name: myName, avatarId: myAvatarId, asSpectator: false, token: myToken }); 
+});
+
 socket.on('hand_started', () => { playSfx('deal'); });
 
 socket.on('game_state', (state) => {
@@ -360,17 +354,15 @@ socket.on('clock_tick', (data) => {
   const bar = document.getElementById('clock-bar'); bar.style.width = pct + '%';
   if (data.seconds <= 5) {
       bar.style.background = 'var(--neon-magenta)'; bar.style.boxShadow = '0 0 10px var(--neon-magenta)';
-      if (gameState && gameState.seats[data.actionSeat] === mySocketId) playSfx('alarm');
+      if (gameState && gameState.seats[data.actionSeat] === myToken) playSfx('alarm');
   } else {
       bar.style.background = 'var(--neon-cyan)'; bar.style.boxShadow = 'none';
   }
-  if (isHost && document.getElementById('host-btn')) { document.getElementById('host-btn').textContent = 'CLOCK ACTIVE'; document.getElementById('host-btn').disabled = true; }
 });
 
 socket.on('clock_clear', () => {
   document.getElementById('clock-container').style.display = 'none';
   const bar = document.getElementById('clock-bar'); bar.style.width = '100%'; bar.style.background = 'var(--neon-cyan)'; bar.style.boxShadow = 'none';
-  if (isHost && document.getElementById('host-btn')) document.getElementById('host-btn').disabled = false;
 });
 
 socket.on('showdown', (result) => {
@@ -402,11 +394,11 @@ socket.on('chat', (data) => {
   box.innerHTML += `<div style="margin-bottom:4px"><span style="color:var(--neon-cyan)">[${data.name || 'SYS'}]</span> ${data.msg}</div>`;
   box.scrollTop = box.scrollHeight;
 
-  if (!data.system && data.socketId && gameState) {
-      let myIdx = gameState.seats.indexOf(mySocketId);
+  if (!data.system && data.token && gameState) {
+      let myIdx = gameState.seats.indexOf(myToken);
       if (myIdx === -1) myIdx = 0;
       
-      const playerIdx = gameState.seats.indexOf(data.socketId);
+      const playerIdx = gameState.seats.indexOf(data.token);
       if (playerIdx !== -1) {
           const visualIdx = (playerIdx - myIdx + gameState.maxPlayers) % gameState.maxPlayers;
           const pos = visualSeats[visualIdx];
@@ -446,6 +438,9 @@ function renderState(state) {
   document.getElementById('pot-amount').textContent = state.pot;
   document.getElementById('phase-label').textContent = state.phase !== 'waiting' ? `PHASE: ${state.phase}` : '';
 
+  // SECURE HOST MIGRATION: Server tells us if we are the host based on our token
+  const isHost = (state.hostToken === myToken);
+
   if (isHost) {
     document.getElementById('host-panel').style.display = 'block';
     if (state.phase === 'waiting') {
@@ -457,12 +452,14 @@ function renderState(state) {
           document.getElementById('host-btn').textContent = 'CALL CLOCK (60S)'; document.getElementById('host-btn').onclick = callClock; document.getElementById('host-btn').style.borderColor = 'var(--neon-magenta)'; document.getElementById('host-btn').style.color = 'var(--neon-magenta)'; document.getElementById('host-btn').disabled = false;
       }
     }
+  } else {
+      document.getElementById('host-panel').style.display = 'none';
   }
 
-  let myIdx = state.seats.indexOf(mySocketId);
+  let myIdx = state.seats.indexOf(myToken);
   if (myIdx === -1) myIdx = 0;
 
-  const myPlayer = state.players[mySocketId];
+  const myPlayer = state.players[myToken];
 
   if (state.allowRebuy && myPlayer) {
      document.getElementById('auto-rebuy-box').style.display = 'block'; document.getElementById('lbl-rebuy-amt').textContent = state.rebuyAmount; document.getElementById('lbl-rebuy-count').textContent = myPlayer.rebuyCount; document.getElementById('lbl-rebuy-max').innerHTML = state.maxRebuys === -1 ? '&infin;' : state.maxRebuys; document.getElementById('cb-auto-rebuy').checked = myPlayer.autoRebuy;
@@ -479,7 +476,7 @@ function renderState(state) {
     const visualIdx = (i - myIdx + state.maxPlayers) % state.maxPlayers; const pos = visualSeats[visualIdx];
 
     let cls = 'seat occupied';
-    if (sId === mySocketId) cls += ' is-me';
+    if (sId === myToken) cls += ' is-me';
     if (player.folded) cls += ' folded';
     if (i === state.actionSeat && state.phase !== 'waiting' && state.phase !== 'game_over') cls += ' active-player';
     if (!player.isActive && !player.isBusted && state.phase !== 'waiting' && state.phase !== 'game_over') cls += ' is-waiting';
@@ -496,7 +493,8 @@ function renderState(state) {
        avatarHtml += `<div class="action-tag ${actClass}">${player.lastAction}</div>`;
     }
 
-    if (player.isBusted) { avatarHtml += `<div class="busted-text">ELIMINATED</div>`;
+    if (player.isDisconnected) { avatarHtml += `<div class="offline-text">OFFLINE</div>`; 
+    } else if (player.isBusted) { avatarHtml += `<div class="busted-text">ELIMINATED</div>`;
     } else if (!player.isActive && state.phase !== 'waiting' && state.phase !== 'game_over') { avatarHtml += `<div class="waiting-text">WAITING</div>`; }
     avatarHtml += `</div>`;
 
@@ -513,7 +511,7 @@ function renderState(state) {
          
          cardsHtml = getSvgCard(c1.rank, c1.suit, false, h1, d1) + getSvgCard(c2.rank, c2.suit, false, h2, d2);
          
-         if (sId === mySocketId) {
+         if (sId === myToken) {
              document.getElementById('my-cards').innerHTML = getSvgCard(c1.rank, c1.suit) + getSvgCard(c2.rank, c2.suit);
          }
       } else { 
@@ -547,7 +545,7 @@ function renderState(state) {
   }
   document.getElementById('community-cards').innerHTML = commHtml;
 
-  const isMyTurn = (state.actionSeat !== -1 && state.seats[state.actionSeat] === mySocketId && state.phase !== 'showdown' && state.phase !== 'game_over');
+  const isMyTurn = (state.actionSeat !== -1 && state.seats[state.actionSeat] === myToken && state.phase !== 'showdown' && state.phase !== 'game_over');
   document.getElementById('table-glow').className = isMyTurn ? 'table-glow my-turn' : 'table-glow';
   document.getElementById('not-your-turn').style.display = 'none'; document.getElementById('your-turn-controls').style.display = 'none'; document.getElementById('manual-rebuy-controls').style.display = 'none';
 
